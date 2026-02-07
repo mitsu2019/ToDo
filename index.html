@@ -172,21 +172,22 @@
                 return currentSort.asc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
             });
 
+            // テーブルの内容を表示順（対応部署、期限、状態、タスク内容／状況、依頼者、日付、操作）に修正
             body.innerHTML = sortedTodos.map(todo => `
                 <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 group clickable" onclick="editTodo('${todo.id}')">
-                    <td class="p-4 font-medium text-slate-800">${todo.requester || '-'}</td>
                     <td class="p-4 text-slate-600">${todo.dept || '-'}</td>
-                    <td class="p-4 text-slate-500">${todo.date || '-'}</td>
                     <td class="p-4 font-mono ${isOverdue(todo.deadline, todo.status) ? 'text-red-500 font-bold' : 'text-slate-600'}">${todo.deadline || '-'}</td>
-                    <td class="p-4 max-w-xs">
-                        <div class="truncate text-slate-800 font-medium" title="${todo.content}">${todo.content || ''}</div>
-                        ${todo.report ? `<div class="truncate text-xs text-blue-600 mt-1" title="${todo.report}">📝 ${todo.report}</div>` : ''}
-                    </td>
                     <td class="p-4">
                         <span class="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${getStatusClass(todo.status)}">
                             ${todo.status || '未開始'}
                         </span>
                     </td>
+                    <td class="p-4 min-w-[200px]">
+                        <div class="truncate text-slate-800 font-medium" title="${todo.content}">${todo.content || ''}</div>
+                        ${todo.report ? `<div class="truncate text-xs text-blue-600 mt-1" title="${todo.report}">📝 ${todo.report}</div>` : ''}
+                    </td>
+                    <td class="p-4 font-medium text-slate-800">${todo.requester || '-'}</td>
+                    <td class="p-4 text-slate-500">${todo.date || '-'}</td>
                     <td class="p-4 text-center">
                         <button onclick="event.stopPropagation(); deleteTodoFromCloud('${todo.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-2">
                             🗑️
@@ -342,7 +343,6 @@
         window.addEventListener('load', () => {
             const dateInput = document.getElementById('f-date');
             if (dateInput) dateInput.valueAsDate = new Date();
-            // ★ポイント：起動時に「管理一覧」を表示する
             window.switchTab('manage'); 
             initFirebase();
         });
@@ -390,12 +390,12 @@
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-slate-50 text-slate-500 text-xs uppercase">
-                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('requester')">依頼者 ⇅</th>
                                     <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('dept')">対応部署 ⇅</th>
-                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('date')">日付 ⇅</th>
                                     <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('deadline')">期限 ⇅</th>
-                                    <th class="p-4 border-b border-slate-100 font-semibold">タスク内容 / 状況</th>
                                     <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('status')">状態 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold">タスク内容 / 状況</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('requester')">依頼者 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('date')">日付 ⇅</th>
                                     <th class="p-4 border-b border-slate-100 font-semibold text-center">操作</th>
                                 </tr>
                             </thead>

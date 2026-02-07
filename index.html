@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U-ToDo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKの読み込み -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // グローバル変数
+        let user = null;
+        let todos = [];
+        let masters = { requesters: [], depts: [] };
+        let isEditing = false;
+        let currentSort = { key: 'deadline', asc: true };
+        
+        // Firebase関連の変数をスコープ外で宣言
+        let app, auth, db;
+        const appId = 'u-todo-app-default';
+
+        // ---------------------------------------------------------
+        // 1. UI操作関数 (Firebase初期化前に定義して確実に動作させる)
+        // ---------------------------------------------------------
+
+        // タブ切り替え
+        window.switchTab = (tabId) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('tab-active', 'text-blue-600');
+                el.classList.add('text-slate-500');
+            });
+            const targetContent = document.getElementById(`content-${tabId}`);
+            if (targetContent) targetContent.classList.remove('hidden');
+            
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('tab-active', 'text-blue-600');
+            }
+            if (tabId === 'input') updateSelects();
+        };
+
+        // モーダル開閉
+        window.toggleMasterModal = (show) => {
+            const modal = document.getElementById('master-modal');
+            if (!modal) return;
+            modal.classList.toggle('hidden', !show);
+            if (!show) updateSelects();
+        };
+
+        // トースト表示
+        window.showToast = (message, icon = '✅') => {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            document.getElementById('toast-icon').innerText = icon;
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 3000);
+        };
+
+        // 編集キャンセル
+        window.cancelEdit = () => {
+            isEditing = false;
+            document.getElementById('form-title').innerText = '新規タスク登録';
+            document.getElementById('submit-btn').innerText = 'ToDoを登録';
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+            const form = document.getElementById('todo-form');
+            if(form) form.reset();
+            document.getElementById('f-id').value = '';
+            const dateInput = document.getElementById('f-date');
+            if (dateInput) dateInput.valueAsDate = new Date();
+        };
+
+        // ToDo編集モードへ
+        window.editTodo = (id) => {
+            const todo = todos.find(t => t.id == id);
+            if (!todo) return;
+            isEditing = true;
+            document.getElementById('form-title').innerText = 'ToDoの内容を編集';
+            document.getElementById('submit-btn').innerText = '変更を保存する';
+            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+            
+            document.getElementById('f-id').value = id;
+            if(todo.requester) document.getElementById('f-requester').value = todo.requester;
+            if(todo.dept) document.getElementById('f-dept').value = todo.dept;
+            if(todo.status) document.getElementById('f-status').value = todo.status;
+            if(todo.date) document.getElementById('f-date').value = todo.date;
+            if(todo.deadline) document.getElementById('f-deadline').value = todo.deadline;
+            if(todo.content) document.getElementById('f-content').value = todo.content;
+            if(todo.report) document.getElementById('f-report').value = todo.report;
+            
+            switchTab('input');
+        };
+
+        // ソート機能
+        window.sortTable = (key) => {
+            if (currentSort.key === key) currentSort.asc = !currentSort.asc;
+            else { currentSort.key = key; currentSort.asc = true; }
+            renderTodos();
+        };
+
+        // ---------------------------------------------------------
+        // 2. データ操作ロジック
+        // ---------------------------------------------------------
+
+        function updateSelects() {
+            const rSelect = document.getElementById('f-requester');
+            const dSelect = document.getElementById('f-dept');
+            if (!rSelect || !dSelect) return;
+
+            const currentR = rSelect.value;
+            const currentD = dSelect.value;
+
+            const safeRequesters = Array.isArray(masters.requesters) ? masters.requesters : [];
+            const safeDepts = Array.isArray(masters.depts) ? masters.depts : [];
+
+            rSelect.innerHTML = '<option value="">選択してください</option>' + 
+                safeRequesters.map(v => `<option value="${v}">${v}</option>`).join('');
+            dSelect.innerHTML = '<option value="">選択してください</option>' + 
+                safeDepts.map(v => `<option value="${v}">${v}</option>`).join('');
+            
+            if(currentR) rSelect.value = currentR;
+            if(currentD) dSelect.value = currentD;
+        }
+
+        function renderMasters() {
+            const reqList = document.getElementById('list-requesters');
+            const deptList = document.getElementById('list-depts');
+            if (!reqList || !deptList) return;
+
+            const safeRequesters = Array.isArray(masters.requesters) ? masters.requesters : [];
+            const safeDepts = Array.isArray(masters.depts) ? masters.depts : [];
+
+            reqList.innerHTML = safeRequesters.map((v, i) => `
+                <li class="flex justify-between items-center bg-white p-3 rounded-lg text-sm border border-slate-200 shadow-sm">
+                    <span class="font-medium text-slate-700">${v}</span>
+                    <button onclick="removeMaster('requesters', ${i})" class="text-slate-300 hover:text-red-500 px-2">✕</button>
+                </li>
+            `).join('');
+            deptList.innerHTML = safeDepts.map((v, i) => `
+                <li class="flex justify-between items-center bg-white p-3 rounded-lg text-sm border border-slate-200 shadow-sm">
+                    <span class="font-medium text-slate-700">${v}</span>
+                    <button onclick="removeMaster('depts', ${i})" class="text-slate-300 hover:text-red-500 px-2">✕</button>
+                </li>
+            `).join('');
+        }
+
+        function renderTodos() {
+            const body = document.getElementById('todo-table-body');
+            const noData = document.getElementById('no-data');
+            if (!body || !noData) return;
+
+            if (todos.length === 0) {
+                body.innerHTML = '';
+                noData.classList.remove('hidden');
+                return;
+            }
+            noData.classList.add('hidden');
+            
+            const sortedTodos = [...todos].sort((a, b) => {
+                let valA = a[currentSort.key] || '';
+                let valB = b[currentSort.key] || '';
+                if (currentSort.key === 'date' || currentSort.key === 'deadline') {
+                    valA = new Date(valA); valB = new Date(valB);
+                }
+                return currentSort.asc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+            });
+
+            body.innerHTML = sortedTodos.map(todo => `
+                <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 group clickable" onclick="editTodo('${todo.id}')">
+                    <td class="p-4 font-medium text-slate-800">${todo.requester || '-'}</td>
+                    <td class="p-4 text-slate-600">${todo.dept || '-'}</td>
+                    <td class="p-4 text-slate-500">${todo.date || '-'}</td>
+                    <td class="p-4 font-mono ${isOverdue(todo.deadline, todo.status) ? 'text-red-500 font-bold' : 'text-slate-600'}">${todo.deadline || '-'}</td>
+                    <td class="p-4 max-w-xs">
+                        <div class="truncate text-slate-800 font-medium" title="${todo.content}">${todo.content || ''}</div>
+                        ${todo.report ? `<div class="truncate text-xs text-blue-600 mt-1" title="${todo.report}">📝 ${todo.report}</div>` : ''}
+                    </td>
+                    <td class="p-4">
+                        <span class="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${getStatusClass(todo.status)}">
+                            ${todo.status || '未開始'}
+                        </span>
+                    </td>
+                    <td class="p-4 text-center">
+                        <button onclick="event.stopPropagation(); deleteTodoFromCloud('${todo.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-2">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function isOverdue(deadline, status) {
+            if (status === '完了' || !deadline) return false;
+            return new Date(deadline) < new Date().setHours(0,0,0,0);
+        }
+
+        function getStatusClass(status) {
+            switch(status) {
+                case '未開始': return 'bg-slate-100 text-slate-600 border border-slate-200';
+                case '進捗中': return 'bg-blue-50 text-blue-700 border border-blue-100';
+                case '完了': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+                default: return 'bg-gray-100';
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 3. Firebase初期化 & クラウド操作 (Try-Catchで保護)
+        // ---------------------------------------------------------
+        
+        async function initFirebase() {
+            try {
+                // Firebase設定
+               const firebaseConfig = {
+    apiKey: "AIzaSyBW0TGJ0TAC29vqDta7j0tJcdwZGMlX3sU",
+    authDomain: "u-todo-eca0c.firebaseapp.com",
+    projectId: "u-todo-eca0c",
+    storageBucket: "u-todo-eca0c.firebasestorage.app",
+    messagingSenderId: "712192496282",
+    appId: "1:712192496282:web:5f7eeaa7453450da18c523",
+    measurementId: "G-KX7XNXKPK2"
+  };
+                
+                // 設定が空の場合は早期リターン（ただしUIは動作する）
+                if (!firebaseConfig.apiKey) {
+                    console.warn("Firebase Config is missing. App running in offline/UI-only mode.");
+                    window.showToast("設定が不足しています。管理者に連絡してください。", "⚠️");
+                    return;
+                }
+
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // 認証開始
+                onAuthStateChanged(auth, (u) => {
+                    user = u;
+                    if (user) setupDataListeners();
+                });
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                window.showToast("システムエラーが発生しました", "❌");
+            }
+        }
+
+        function setupDataListeners() {
+            if (!user || !db) return;
+
+            // マスター取得
+            const masterDocPath = ['artifacts', appId, 'public', 'data', 'settings', 'masters'];
+            const masterDocRef = doc(db, ...masterDocPath);
+            
+            onSnapshot(masterDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    masters = docSnap.data();
+                } else {
+                    masters = {
+                        requesters: ['本部 太郎', '開発 花子'],
+                        depts: ['人事部', '開発部', '営業部', '広報部']
+                    };
+                    setDoc(masterDocRef, masters);
+                }
+                renderMasters();
+                updateSelects();
+            }, (error) => console.error("Master Listener Error:", error));
+
+            // ToDo取得
+            const todoCol = collection(db, 'artifacts', appId, 'public', 'data', 'todos');
+            onSnapshot(todoCol, (querySnapshot) => {
+                todos = [];
+                querySnapshot.forEach((doc) => {
+                    todos.push({ id: doc.id, ...doc.data() });
+                });
+                renderTodos();
+            }, (error) => console.error("Todo Listener Error:", error));
+        }
+
+        // --- クラウド操作関数群 (windowに登録) ---
+
+        window.saveTodo = async (todoData, existingId = null) => {
+            if (!user || !db) return window.showToast("保存できません（未接続）", "⚠️");
+            const todoCol = collection(db, 'artifacts', appId, 'public', 'data', 'todos');
+            try {
+                if (existingId) {
+                    await updateDoc(doc(todoCol, existingId), todoData);
+                    window.showToast('ToDoを更新しました');
+                } else {
+                    const newDocRef = doc(todoCol);
+                    await setDoc(newDocRef, {
+                        ...todoData,
+                        createdAt: new Date().toISOString()
+                    });
+                    window.showToast('ToDoを登録しました');
+                }
+            } catch (error) {
+                console.error("Save Error:", error);
+                window.showToast("保存に失敗しました", "❌");
+            }
+        };
+
+        window.deleteTodoFromCloud = async (id) => {
+            if (!user || !db) return;
+            if (!confirm('このToDoを削除してもよろしいですか？')) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'todos', id));
+                window.showToast('削除しました', '🗑️');
+            } catch (error) {
+                window.showToast("削除に失敗しました", "❌");
+            }
+        };
+
+        window.saveMastersToCloud = async (newMasters) => {
+            if (!user || !db) return window.showToast("保存できません（未接続）", "⚠️");
+            try {
+                const masterDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'masters');
+                await setDoc(masterDocRef, newMasters);
+            } catch (error) {
+                window.showToast("マスター保存失敗", "❌");
+            }
+        };
+
+        window.addMaster = (type) => {
+            const inputId = type === 'requesters' ? 'master-requester-input' : 'master-dept-input';
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const value = input.value.trim();
+            if (!value) return window.showToast("値を入力してください", "⚠️");
+            
+            // 配列初期化チェック
+            if (!masters[type]) masters[type] = [];
+            
+            if (masters[type].includes(value)) return window.showToast("登録済みです", "⚠️");
+            
+            masters[type].push(value);
+            saveMastersToCloud(masters);
+            input.value = '';
+            renderMasters(); // 即時反映
+            window.showToast("登録しました");
+        };
+
+        window.removeMaster = (type, index) => {
+            if (masters[type]) {
+                masters[type].splice(index, 1);
+                saveMastersToCloud(masters);
+                renderMasters(); // 即時反映
+            }
+        };
+
+        window.submitTodoForm = (e) => {
+            e.preventDefault();
+            const idField = document.getElementById('f-id').value;
+            const data = {
+                requester: document.getElementById('f-requester').value,
+                dept: document.getElementById('f-dept').value,
+                status: document.getElementById('f-status').value,
+                date: document.getElementById('f-date').value,
+                deadline: document.getElementById('f-deadline').value,
+                content: document.getElementById('f-content').value,
+                report: document.getElementById('f-report').value,
+            };
+            window.saveTodo(data, idField || null);
+            window.cancelEdit();
+            window.switchTab('manage');
+        };
+
+        // 初期化実行
+        window.addEventListener('load', () => {
+            // UI初期化
+            const dateInput = document.getElementById('f-date');
+            if (dateInput) dateInput.valueAsDate = new Date();
+            updateSelects(); // 初期表示用
+            
+            // Firebase初期化
+            initFirebase();
+        });
+
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; background-color: #f8fafc; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .modal-animate-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        tr.clickable:hover { cursor: pointer; background-color: #f1f5f9; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
+                    <span class="text-blue-600">📋</span> U-ToDo
+                </h1>
+                <p class="text-slate-500 mt-2">クラウド保存対応・チーム共有タスク管理</p>
+            </div>
+            <button onclick="toggleMasterModal(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-lg">
+                ⚙️ マスター登録
+            </button>
+        </header>
+
+        <nav class="flex space-x-8 border-b border-slate-200 mb-8 overflow-x-auto">
+            <button onclick="switchTab('input')" id="tab-input" class="tab-btn py-4 px-1 text-sm font-medium text-blue-600 transition-all tab-active">ToDo入力</button>
+            <button onclick="switchTab('manage')" id="tab-manage" class="tab-btn py-4 px-1 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all">ToDo管理一覧</button>
+        </nav>
+
+        <main>
+            <section id="content-input" class="tab-content block">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 id="form-title" class="text-xl font-semibold text-slate-700">新規タスク登録</h2>
+                        <button id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-sm text-red-500 hover:text-red-700 font-medium">キャンセル</button>
+                    </div>
+                    <form id="todo-form" onsubmit="submitTodoForm(event)" class="space-y-4">
+                        <input type="hidden" id="f-id">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div><label class="block text-sm font-medium text-slate-600 mb-1">依頼者</label><select id="f-requester" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none" required></select></div>
+                            <div><label class="block text-sm font-medium text-slate-600 mb-1">対応部署</label><select id="f-dept" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none" required></select></div>
+                            <div><label class="block text-sm font-medium text-slate-600 mb-1">ステータス</label><select id="f-status" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none"><option value="未開始">未開始</option><option value="進捗中">進捗中</option><option value="完了">完了</option></select></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-slate-600 mb-1">日付</label><input type="date" id="f-date" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none" required></div>
+                            <div><label class="block text-sm font-medium text-slate-600 mb-1">締切期限</label><input type="date" id="f-deadline" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none" required></div>
+                        </div>
+                        <div><label class="block text-sm font-medium text-slate-600 mb-1">タスク内容</label><textarea id="f-content" rows="3" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none" required></textarea></div>
+                        <div><label class="block text-sm font-medium text-slate-600 mb-1">状況報告</label><textarea id="f-report" rows="3" class="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none bg-slate-50"></textarea></div>
+                        <div class="flex justify-end pt-4"><button type="submit" id="submit-btn" class="bg-blue-600 text-white font-bold py-2 px-8 rounded-lg shadow-md">ToDoを登録</button></div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="content-manage" class="tab-content hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 class="text-xl font-semibold text-slate-700">ToDoリスト一覧</h2>
+                        <div class="text-xs text-slate-400 italic">※ 行をクリックすると編集できます</div>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('requester')">依頼者 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('dept')">対応部署 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('date')">日付 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('deadline')">期限 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold">タスク内容 / 状況</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold cursor-pointer" onclick="sortTable('status')">状態 ⇅</th>
+                                    <th class="p-4 border-b border-slate-100 font-semibold text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="todo-table-body" class="text-sm text-slate-700"></tbody>
+                        </table>
+                    </div>
+                    <div id="no-data" class="hidden text-center py-12"><p class="text-slate-400 italic">登録されたToDoはありません</p></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- マスター登録モーダル -->
+    <div id="master-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white w-full max-w-4xl h-[90vh] md:h-auto rounded-2xl shadow-2xl flex flex-col modal-animate-in overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h2 class="text-xl font-bold text-slate-800">⚙️ マスター登録管理</h2>
+                <button onclick="toggleMasterModal(false)" class="text-slate-400 text-2xl">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <h3 class="font-bold text-slate-700 border-l-4 border-blue-500 pl-3">依頼者の追加</h3>
+                        <div class="flex gap-2"><input type="text" id="master-requester-input" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 outline-none"><button onclick="addMaster('requesters')" class="bg-blue-600 text-white px-4 py-2 rounded-lg">追加</button></div>
+                        <ul id="list-requesters" class="space-y-2 pr-2"></ul>
+                    </div>
+                    <div class="space-y-4">
+                        <h3 class="font-bold text-slate-700 border-l-4 border-blue-500 pl-3">対応部署の追加</h3>
+                        <div class="flex gap-2"><input type="text" id="master-dept-input" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 outline-none"><button onclick="addMaster('depts')" class="bg-blue-600 text-white px-4 py-2 rounded-lg">追加</button></div>
+                        <ul id="list-depts" class="space-y-2 pr-2"></ul>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-100 flex justify-end">
+                <button onclick="toggleMasterModal(false)" class="bg-slate-800 text-white px-8 py-2 rounded-lg">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-8 right-8 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl transition-all duration-300 transform translate-y-24 opacity-0 flex items-center gap-2 z-[100]">
+        <span id="toast-icon">✅</span><span id="toast-message">メッセージ</span>
+    </div>
+</body>
+</html>

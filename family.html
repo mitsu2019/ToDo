@@ -7,64 +7,71 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e5e7eb; }
-        .calendar-day { min-height: 100px; background-color: white; padding: 6px; display: flex; flex-direction: column; }
-        .status-dinner-yes { background-color: #dcfce7 !important; border-left: 3px solid #22c55e; }
-        .status-dinner-no { background-color: #fee2e2 !important; border-left: 3px solid #ef4444; }
-        .status-trip { background-color: #fef9c3 !important; border-left: 3px solid #eab308; }
-        .status-plan { background-color: #dbeafe !important; border-left: 3px solid #3b82f6; }
+        .calendar-day { min-height: 100px; background-color: white; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+        .bg-dinner-yes { background-color: #dcfce7; border-left: 3px solid #22c55e; }
+        .bg-dinner-no { background-color: #fee2e2; border-left: 3px solid #ef4444; }
+        .bg-has-plan { border-right: 3px solid #3b82f6; } /* 予定がある場合は右側に青線 */
         .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: bold; }
-        @media (max-width: 640px) { .calendar-day { min-height: 85px; font-size: 0.75rem; } }
+        @media (max-width: 640px) { .calendar-day { min-height: 90px; font-size: 0.7rem; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
     <div id="app" class="max-w-4xl mx-auto p-4 pb-20">
-        <header class="flex justify-center items-center py-6">
-            <h1 class="text-2xl font-extrabold text-slate-700">晩ご飯・予定共有</h1>
+        <header class="flex justify-center items-center py-4">
+            <h1 class="text-xl font-extrabold text-slate-700">晩ご飯・予定共有</h1>
         </header>
 
-        <div class="flex mb-6 border-b bg-white rounded-t-xl overflow-hidden shadow-sm">
-            <button id="btn-view-calendar" class="flex-1 py-4 transition-all tab-active">カレンダー表示</button>
-            <button id="btn-view-batch" class="flex-1 py-4 text-slate-400 transition-all">まとめて入力</button>
+        <div class="flex mb-4 border-b bg-white rounded-t-xl overflow-hidden shadow-sm">
+            <button id="btn-view-calendar" class="flex-1 py-4 tab-active">カレンダー表示</button>
+            <button id="btn-view-batch" class="flex-1 py-4 text-slate-400">まとめて入力</button>
         </div>
 
         <section id="view-calendar">
-            <div class="flex items-center justify-between mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <button id="prev-month" class="p-2 border rounded-full hover:bg-slate-100">◀</button>
-                <h2 id="month-display" class="text-lg font-bold"></h2>
-                <button id="next-month" class="p-2 border rounded-full hover:bg-slate-100">▶</button>
+            <div class="flex items-center justify-between mb-4 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                <button id="prev-month" class="p-2 border rounded-full">◀</button>
+                <h2 id="month-display" class="font-bold"></h2>
+                <button id="next-month" class="p-2 border rounded-full">▶</button>
             </div>
             <div class="calendar-grid rounded-xl overflow-hidden border border-slate-200 shadow-md">
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-red-400">Sun</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-slate-500">Mon</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-slate-500">Tue</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-slate-500">Wed</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-slate-500">Thu</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-slate-500">Fri</div>
-                <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-blue-400">Sat</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-red-400">Sun</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-slate-500">Mon</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-slate-500">Tue</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-slate-500">Wed</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-slate-500">Thu</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-slate-500">Fri</div>
+                <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-blue-400">Sat</div>
                 <div id="calendar-days" class="contents"></div>
             </div>
         </section>
 
         <section id="view-batch" class="hidden">
-            <div id="batch-input-list" class="space-y-4"></div>
+            <div id="batch-input-list" class="space-y-3"></div>
         </section>
     </div>
 
     <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
-            <h3 id="modal-date-title" class="text-lg font-extrabold mb-4 text-center"></h3>
+            <h3 id="modal-date-title" class="text-lg font-extrabold mb-4 text-center border-b pb-2"></h3>
+            
+            <p class="text-xs font-bold text-slate-400 mb-2">🍚 晩ご飯（どちらか１つ）</p>
             <div class="grid grid-cols-2 gap-2 mb-4">
-                <button data-status="dinner-yes" class="modal-status-btn py-3 bg-green-500 text-white rounded-xl font-bold transition-transform active:scale-95">いる</button>
-                <button data-status="dinner-no" class="modal-status-btn py-3 bg-red-500 text-white rounded-xl font-bold transition-transform active:scale-95">不要</button>
-                <button data-status="trip" class="modal-status-btn py-3 bg-yellow-400 text-white rounded-xl font-bold transition-transform active:scale-95">出張</button>
-                <button data-status="plan" class="modal-status-btn py-3 bg-blue-500 text-white rounded-xl font-bold transition-transform active:scale-95">予定</button>
+                <button data-group="dinner" data-status="dinner-yes" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">いる</button>
+                <button data-group="dinner" data-status="dinner-no" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">不要</button>
             </div>
+
+            <p class="text-xs font-bold text-slate-400 mb-2">📅 予定（どちらか１つ）</p>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button data-group="plan" data-status="trip" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">出張</button>
+                <button data-group="plan" data-status="plan" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">予定</button>
+            </div>
+
             <div id="modal-comment-container" class="hidden">
-                <textarea id="modal-comment" class="w-full p-3 bg-slate-50 border rounded-xl text-sm mb-4 focus:ring-2 focus:ring-slate-300 outline-none" rows="2" placeholder="詳細を入力..."></textarea>
+                <textarea id="modal-comment" class="w-full p-3 bg-slate-50 border rounded-xl text-sm mb-4" rows="2" placeholder="詳細を入力..."></textarea>
             </div>
-            <button id="save-btn" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold mb-2 shadow-lg active:bg-slate-700">保存する</button>
-            <button id="close-modal" class="w-full text-slate-400 text-xs py-2 text-center hover:text-slate-600">キャンセル</button>
+            
+            <button id="save-btn" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold mb-2">保存する</button>
+            <button id="close-modal" class="w-full text-slate-400 text-xs py-2">キャンセル</button>
         </div>
     </div>
 
@@ -85,188 +92,26 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const COLLECTION_NAME = "schedules";
+        const COLLECTION_NAME = "schedules_v2"; // データ構造が変わるためコレクション名を変更
 
         let currentDate = new Date();
         let user = null;
         let scheduleData = {};
         let selectedDateKey = null;
-        let selectedStatusModal = null;
+        let editState = { dinner: null, plan: null };
 
-        // --- UI表示 ---
+        // --- 描画ロジック ---
         const renderAll = () => {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             document.getElementById('month-display').textContent = `${year}年 ${month + 1}月`;
 
-            const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDay = new Date(year, month, 1).getDay();
 
-            // カレンダー描画
+            // カレンダー
             const calContainer = document.getElementById('calendar-days');
             calContainer.innerHTML = '';
-            for (let i = 0; i < firstDay; i++) {
-                calContainer.appendChild(Object.assign(document.createElement('div'), { className: 'calendar-day bg-slate-50/50' }));
-            }
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const data = scheduleData[dateKey] || {};
-                const dayEl = document.createElement('div');
-                dayEl.className = `calendar-day cursor-pointer border-b border-r border-slate-100 ${getStatusClass(data.status)}`;
-                dayEl.innerHTML = `
-                    <div class="text-[10px] font-bold ${getDayColorClass(year, month, d)}">${d}</div>
-                    <div class="text-[10px] mt-auto font-bold text-center">${getStatusLabel(data.status)}</div>
-                    ${data.comment ? `<div class="text-[8px] text-slate-500 truncate">💬${data.comment}</div>` : ''}
-                `;
-                dayEl.onclick = () => openInputModal(dateKey);
-                calContainer.appendChild(dayEl);
-            }
+            for (let i = 0; i < firstDay; i++) calContainer.appendChild(document.createElement('div'));
 
-            // 週間リスト描画
-            const list = document.getElementById('batch-input-list');
-            list.innerHTML = '';
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const data = scheduleData[dateKey] || {};
-                const dayLabel = ['日','月','火','水','木','金','土'][new Date(year, month, d).getDay()];
-                const row = document.createElement('div');
-                row.className = 'p-4 bg-white rounded-2xl border shadow-sm space-y-3';
-                row.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-sm ${getDayColorClass(year, month, d)}">${d}日 (${dayLabel})</span>
-                        <span class="text-[10px] text-slate-400 truncate max-w-[150px]">${data.comment || ''}</span>
-                    </div>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button data-type="batch-btn" data-date="${dateKey}" data-status="dinner-yes" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='dinner-yes'?'bg-green-500 text-white font-bold':'bg-slate-50'}">いる</button>
-                        <button data-type="batch-btn" data-date="${dateKey}" data-status="dinner-no" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='dinner-no'?'bg-red-500 text-white font-bold':'bg-slate-50'}">不要</button>
-                        <button data-type="batch-btn" data-date="${dateKey}" data-status="trip" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='trip'?'bg-yellow-400 text-white font-bold':'bg-slate-50'}">出張</button>
-                        <button data-type="batch-btn" data-date="${dateKey}" data-status="plan" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='plan'?'bg-blue-500 text-white font-bold':'bg-slate-50'}">予定</button>
-                    </div>
-                `;
-                list.appendChild(row);
-            }
-        };
-
-        const getStatusClass = (s) => {
-            if (s === 'dinner-yes') return 'status-dinner-yes';
-            if (s === 'dinner-no') return 'status-dinner-no';
-            if (s === 'trip') return 'status-trip';
-            if (s === 'plan') return 'status-plan';
-            return '';
-        };
-        const getStatusLabel = (s) => {
-            if (s === 'dinner-yes') return '🍚いる';
-            if (s === 'dinner-no') return '✖不要';
-            if (s === 'trip') return '✈出張';
-            if (s === 'plan') return '📅予定';
-            return '';
-        };
-        const getDayColorClass = (y, m, d) => {
-            const day = new Date(y, m, d).getDay();
-            if (day === 0) return 'text-red-400';
-            if (day === 6) return 'text-blue-400';
-            return 'text-slate-500';
-        };
-
-        // --- ロジック ---
-        const openInputModal = (dateKey, forceStatus = null) => {
-            selectedDateKey = dateKey;
-            const data = scheduleData[dateKey] || {};
-            document.getElementById('modal-date-title').textContent = dateKey.replace(/-/g, '/');
-            selectedStatusModal = forceStatus || data.status;
-            document.getElementById('modal-comment').value = data.comment || '';
-            
-            // ステータスボタンの見た目更新
-            document.querySelectorAll('.modal-status-btn').forEach(btn => {
-                btn.classList.toggle('ring-4', btn.dataset.status === selectedStatusModal);
-                btn.classList.toggle('ring-slate-300', btn.dataset.status === selectedStatusModal);
-            });
-
-            toggleCommentField(selectedStatusModal);
-            document.getElementById('edit-modal').classList.remove('hidden');
-        };
-
-        const toggleCommentField = (status) => {
-            const container = document.getElementById('modal-comment-container');
-            if (status === 'trip' || status === 'plan') container.classList.remove('hidden');
-            else container.classList.add('hidden');
-        };
-
-        const saveToFirebase = async (dateKey, status, comment = "") => {
-            if (!user) return alert("接続中です。もう一度お試しください。");
-            try {
-                await setDoc(doc(db, COLLECTION_NAME, dateKey), {
-                    status,
-                    comment: comment.trim(),
-                    uid: user.uid,
-                    updatedAt: serverTimestamp()
-                });
-                document.getElementById('edit-modal').classList.add('hidden');
-            } catch (err) { alert("保存できませんでした: " + err.message); }
-        };
-
-        // --- イベント管理 ---
-        document.body.addEventListener('click', (e) => {
-            // まとめて入力ボタン
-            if (e.target.dataset.type === 'batch-btn') {
-                const { date, status } = e.target.dataset;
-                if (status === 'trip' || status === 'plan') openInputModal(date, status);
-                else saveToFirebase(date, status, "");
-            }
-            // モーダルステータスボタン
-            if (e.target.classList.contains('modal-status-btn')) {
-                selectedStatusModal = e.target.dataset.status;
-                toggleCommentField(selectedStatusModal);
-                document.querySelectorAll('.modal-status-btn').forEach(btn => {
-                    btn.classList.remove('ring-4', 'ring-slate-300');
-                });
-                e.target.classList.add('ring-4', 'ring-slate-300');
-            }
-        });
-
-        document.getElementById('save-btn').onclick = () => {
-            const comment = document.getElementById('modal-comment').value;
-            saveToFirebase(selectedDateKey, selectedStatusModal, comment);
-        };
-
-        document.getElementById('close-modal').onclick = () => document.getElementById('edit-modal').classList.add('hidden');
-        document.getElementById('prev-month').onclick = () => { currentDate.setMonth(currentDate.getMonth() - 1); renderAll(); };
-        document.getElementById('next-month').onclick = () => { currentDate.setMonth(currentDate.getMonth() + 1); renderAll(); };
-
-        document.getElementById('btn-view-calendar').onclick = () => {
-            document.getElementById('view-calendar').classList.remove('hidden');
-            document.getElementById('view-batch').classList.add('hidden');
-            document.getElementById('btn-view-calendar').classList.add('tab-active');
-            document.getElementById('btn-view-batch').classList.remove('tab-active');
-        };
-        document.getElementById('btn-view-batch').onclick = () => {
-            document.getElementById('view-batch').classList.remove('hidden');
-            document.getElementById('view-calendar').classList.add('hidden');
-            document.getElementById('btn-view-batch').classList.add('tab-active');
-            document.getElementById('btn-view-calendar').classList.remove('tab-active');
-        };
-
-// --- 認証 & 同期 (デバッグ用修正版) ---
-        onAuthStateChanged(auth, (u) => {
-            user = u;
-            if (user) {
-                console.log("ログイン成功:", user.uid);
-                // 成功したらヘッダーの色を変えて知らせる
-                document.querySelector('h1').style.color = '#22c55e'; 
-                onSnapshot(collection(db, COLLECTION_NAME), (snapshot) => {
-                    scheduleData = {};
-                    snapshot.forEach(doc => { scheduleData[doc.id] = doc.data(); });
-                    renderAll();
-                });
-            } else {
-                console.log("ログイン試行中...");
-                signInAnonymously(auth).catch(err => {
-                    alert("Firebase認証エラー: " + err.message);
-                });
-            }
-        });
-
-        renderAll();
-    </script>
-</body>
-</html>
+            for (let d = 1; d <= daysInMonth; d

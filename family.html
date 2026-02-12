@@ -30,9 +30,9 @@
 
         <section id="view-calendar">
             <div class="flex items-center justify-between mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <button id="prev-month" class="p-2 border rounded-full">◀</button>
+                <button id="prev-month" class="p-2 border rounded-full hover:bg-slate-100">◀</button>
                 <h2 id="month-display" class="text-lg font-bold"></h2>
-                <button id="next-month" class="p-2 border rounded-full">▶</button>
+                <button id="next-month" class="p-2 border rounded-full hover:bg-slate-100">▶</button>
             </div>
             <div class="calendar-grid rounded-xl overflow-hidden border border-slate-200 shadow-md">
                 <div class="bg-slate-100 p-2 text-center text-[10px] font-bold text-red-400">Sun</div>
@@ -55,23 +55,23 @@
         <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
             <h3 id="modal-date-title" class="text-lg font-extrabold mb-4 text-center"></h3>
             <div class="grid grid-cols-2 gap-2 mb-4">
-                <button data-status="dinner-yes" class="modal-status-btn py-3 bg-green-500 text-white rounded-xl font-bold">いる</button>
-                <button data-status="dinner-no" class="modal-status-btn py-3 bg-red-500 text-white rounded-xl font-bold">不要</button>
-                <button data-status="trip" class="modal-status-btn py-3 bg-yellow-400 text-white rounded-xl font-bold">出張</button>
-                <button data-status="plan" class="modal-status-btn py-3 bg-blue-500 text-white rounded-xl font-bold">予定</button>
+                <button data-status="dinner-yes" class="modal-status-btn py-3 bg-green-500 text-white rounded-xl font-bold transition-transform active:scale-95">いる</button>
+                <button data-status="dinner-no" class="modal-status-btn py-3 bg-red-500 text-white rounded-xl font-bold transition-transform active:scale-95">不要</button>
+                <button data-status="trip" class="modal-status-btn py-3 bg-yellow-400 text-white rounded-xl font-bold transition-transform active:scale-95">出張</button>
+                <button data-status="plan" class="modal-status-btn py-3 bg-blue-500 text-white rounded-xl font-bold transition-transform active:scale-95">予定</button>
             </div>
             <div id="modal-comment-container" class="hidden">
-                <textarea id="modal-comment" class="w-full p-3 bg-slate-50 border rounded-xl text-sm mb-4" rows="2" placeholder="詳細を入力してください..."></textarea>
+                <textarea id="modal-comment" class="w-full p-3 bg-slate-50 border rounded-xl text-sm mb-4 focus:ring-2 focus:ring-slate-300 outline-none" rows="2" placeholder="詳細を入力..."></textarea>
             </div>
-            <button id="save-btn" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold mb-2">保存する</button>
-            <button id="close-modal" class="w-full text-slate-400 text-xs py-2 text-center">キャンセル</button>
+            <button id="save-btn" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold mb-2 shadow-lg active:bg-slate-700">保存する</button>
+            <button id="close-modal" class="w-full text-slate-400 text-xs py-2 text-center hover:text-slate-600">キャンセル</button>
         </div>
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA4gVP3A9Ls3z0gKUFA0GmJu_pDgTYwg3s",
@@ -93,45 +93,21 @@
         let selectedDateKey = null;
         let selectedStatusModal = null;
 
-        // --- UI表示ロジック ---
-        const getStatusClass = (s) => {
-            if (s === 'dinner-yes') return 'status-dinner-yes';
-            if (s === 'dinner-no') return 'status-dinner-no';
-            if (s === 'trip') return 'status-trip';
-            if (s === 'plan') return 'status-plan';
-            return '';
-        };
-
-        const getStatusLabel = (s) => {
-            if (s === 'dinner-yes') return '🍚いる';
-            if (s === 'dinner-no') return '✖不要';
-            if (s === 'trip') return '✈出張';
-            if (s === 'plan') return '📅予定';
-            return '';
-        };
-
-        const getDayColorClass = (y, m, d) => {
-            const day = new Date(y, m, d).getDay();
-            if (day === 0) return 'text-red-400';
-            if (day === 6) return 'text-blue-400';
-            return 'text-slate-500';
-        };
-
+        // --- UI表示 ---
         const renderAll = () => {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             document.getElementById('month-display').textContent = `${year}年 ${month + 1}月`;
 
-            // カレンダー
-            const calContainer = document.getElementById('calendar-days');
-            calContainer.innerHTML = '';
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
+            // カレンダー描画
+            const calContainer = document.getElementById('calendar-days');
+            calContainer.innerHTML = '';
             for (let i = 0; i < firstDay; i++) {
                 calContainer.appendChild(Object.assign(document.createElement('div'), { className: 'calendar-day bg-slate-50/50' }));
             }
-
             for (let d = 1; d <= daysInMonth; d++) {
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const data = scheduleData[dateKey] || {};
@@ -142,11 +118,11 @@
                     <div class="text-[10px] mt-auto font-bold text-center">${getStatusLabel(data.status)}</div>
                     ${data.comment ? `<div class="text-[8px] text-slate-500 truncate">💬${data.comment}</div>` : ''}
                 `;
-                dayEl.addEventListener('click', () => openInputModal(dateKey));
+                dayEl.onclick = () => openInputModal(dateKey);
                 calContainer.appendChild(dayEl);
             }
 
-            // 週間リスト
+            // 週間リスト描画
             const list = document.getElementById('batch-input-list');
             list.innerHTML = '';
             for (let d = 1; d <= daysInMonth; d++) {
@@ -161,23 +137,51 @@
                         <span class="text-[10px] text-slate-400 truncate max-w-[150px]">${data.comment || ''}</span>
                     </div>
                     <div class="grid grid-cols-4 gap-2">
-                        <button data-action="quick" data-date="${dateKey}" data-status="dinner-yes" class="py-2 text-[10px] rounded-lg border ${data.status==='dinner-yes'?'bg-green-500 text-white font-bold':'bg-slate-50'}">いる</button>
-                        <button data-action="quick" data-date="${dateKey}" data-status="dinner-no" class="py-2 text-[10px] rounded-lg border ${data.status==='dinner-no'?'bg-red-500 text-white font-bold':'bg-slate-50'}">不要</button>
-                        <button data-action="quick" data-date="${dateKey}" data-status="trip" class="py-2 text-[10px] rounded-lg border ${data.status==='trip'?'bg-yellow-400 text-white font-bold':'bg-slate-50'}">出張</button>
-                        <button data-action="quick" data-date="${dateKey}" data-status="plan" class="py-2 text-[10px] rounded-lg border ${data.status==='plan'?'bg-blue-500 text-white font-bold':'bg-slate-50'}">予定</button>
+                        <button data-type="batch-btn" data-date="${dateKey}" data-status="dinner-yes" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='dinner-yes'?'bg-green-500 text-white font-bold':'bg-slate-50'}">いる</button>
+                        <button data-type="batch-btn" data-date="${dateKey}" data-status="dinner-no" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='dinner-no'?'bg-red-500 text-white font-bold':'bg-slate-50'}">不要</button>
+                        <button data-type="batch-btn" data-date="${dateKey}" data-status="trip" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='trip'?'bg-yellow-400 text-white font-bold':'bg-slate-50'}">出張</button>
+                        <button data-type="batch-btn" data-date="${dateKey}" data-status="plan" class="py-2 text-[10px] rounded-lg border transition-all ${data.status==='plan'?'bg-blue-500 text-white font-bold':'bg-slate-50'}">予定</button>
                     </div>
                 `;
                 list.appendChild(row);
             }
         };
 
-        // --- データ処理 ---
-        const openInputModal = (dateKey, autoStatus = null) => {
+        const getStatusClass = (s) => {
+            if (s === 'dinner-yes') return 'status-dinner-yes';
+            if (s === 'dinner-no') return 'status-dinner-no';
+            if (s === 'trip') return 'status-trip';
+            if (s === 'plan') return 'status-plan';
+            return '';
+        };
+        const getStatusLabel = (s) => {
+            if (s === 'dinner-yes') return '🍚いる';
+            if (s === 'dinner-no') return '✖不要';
+            if (s === 'trip') return '✈出張';
+            if (s === 'plan') return '📅予定';
+            return '';
+        };
+        const getDayColorClass = (y, m, d) => {
+            const day = new Date(y, m, d).getDay();
+            if (day === 0) return 'text-red-400';
+            if (day === 6) return 'text-blue-400';
+            return 'text-slate-500';
+        };
+
+        // --- ロジック ---
+        const openInputModal = (dateKey, forceStatus = null) => {
             selectedDateKey = dateKey;
             const data = scheduleData[dateKey] || {};
             document.getElementById('modal-date-title').textContent = dateKey.replace(/-/g, '/');
-            selectedStatusModal = autoStatus || data.status;
+            selectedStatusModal = forceStatus || data.status;
             document.getElementById('modal-comment').value = data.comment || '';
+            
+            // ステータスボタンの見た目更新
+            document.querySelectorAll('.modal-status-btn').forEach(btn => {
+                btn.classList.toggle('ring-4', btn.dataset.status === selectedStatusModal);
+                btn.classList.toggle('ring-slate-300', btn.dataset.status === selectedStatusModal);
+            });
+
             toggleCommentField(selectedStatusModal);
             document.getElementById('edit-modal').classList.remove('hidden');
         };
@@ -189,7 +193,7 @@
         };
 
         const saveToFirebase = async (dateKey, status, comment = "") => {
-            if (!user) return;
+            if (!user) return alert("接続中です。もう一度お試しください。");
             try {
                 await setDoc(doc(db, COLLECTION_NAME, dateKey), {
                     status,
@@ -198,39 +202,37 @@
                     updatedAt: serverTimestamp()
                 });
                 document.getElementById('edit-modal').classList.add('hidden');
-            } catch (err) { console.error("Save Error:", err); }
+            } catch (err) { alert("保存できませんでした: " + err.message); }
         };
 
-        // --- 全体のイベント管理 ---
-        document.addEventListener('click', (e) => {
-            const target = e.target;
-            
-            // 週間リストのボタン
-            if (target.dataset.action === 'quick') {
-                const { date, status } = target.dataset;
-                if (status === 'trip' || status === 'plan') {
-                    openInputModal(date, status);
-                } else {
-                    saveToFirebase(date, status, "");
-                }
+        // --- イベント管理 ---
+        document.body.addEventListener('click', (e) => {
+            // まとめて入力ボタン
+            if (e.target.dataset.type === 'batch-btn') {
+                const { date, status } = e.target.dataset;
+                if (status === 'trip' || status === 'plan') openInputModal(date, status);
+                else saveToFirebase(date, status, "");
             }
-            
-            // モーダル内のステータスボタン
-            if (target.classList.contains('modal-status-btn')) {
-                selectedStatusModal = target.dataset.status;
+            // モーダルステータスボタン
+            if (e.target.classList.contains('modal-status-btn')) {
+                selectedStatusModal = e.target.dataset.status;
                 toggleCommentField(selectedStatusModal);
-                document.querySelectorAll('.modal-status-btn').forEach(b => b.classList.remove('ring-4', 'ring-slate-300'));
-                target.classList.add('ring-4', 'ring-slate-300');
+                document.querySelectorAll('.modal-status-btn').forEach(btn => {
+                    btn.classList.remove('ring-4', 'ring-slate-300');
+                });
+                e.target.classList.add('ring-4', 'ring-slate-300');
             }
         });
 
-        // 固定ボタン
-        document.getElementById('save-btn').onclick = () => saveToFirebase(selectedDateKey, selectedStatusModal, document.getElementById('modal-comment').value);
+        document.getElementById('save-btn').onclick = () => {
+            const comment = document.getElementById('modal-comment').value;
+            saveToFirebase(selectedDateKey, selectedStatusModal, comment);
+        };
+
         document.getElementById('close-modal').onclick = () => document.getElementById('edit-modal').classList.add('hidden');
         document.getElementById('prev-month').onclick = () => { currentDate.setMonth(currentDate.getMonth() - 1); renderAll(); };
         document.getElementById('next-month').onclick = () => { currentDate.setMonth(currentDate.getMonth() + 1); renderAll(); };
-        
-        // 切り替えタブ
+
         document.getElementById('btn-view-calendar').onclick = () => {
             document.getElementById('view-calendar').classList.remove('hidden');
             document.getElementById('view-batch').classList.add('hidden');
@@ -258,7 +260,6 @@
             }
         });
 
-        // 初回実行（枠組みを出す）
         renderAll();
     </script>
 </body>

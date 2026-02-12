@@ -246,17 +246,23 @@
             document.getElementById('btn-view-calendar').classList.remove('tab-active');
         };
 
-        // --- 認証 & 同期 ---
+// --- 認証 & 同期 (デバッグ用修正版) ---
         onAuthStateChanged(auth, (u) => {
             user = u;
             if (user) {
+                console.log("ログイン成功:", user.uid);
+                // 成功したらヘッダーの色を変えて知らせる
+                document.querySelector('h1').style.color = '#22c55e'; 
                 onSnapshot(collection(db, COLLECTION_NAME), (snapshot) => {
                     scheduleData = {};
                     snapshot.forEach(doc => { scheduleData[doc.id] = doc.data(); });
                     renderAll();
                 });
             } else {
-                signInAnonymously(auth);
+                console.log("ログイン試行中...");
+                signInAnonymously(auth).catch(err => {
+                    alert("Firebase認証エラー: " + err.message);
+                });
             }
         });
 

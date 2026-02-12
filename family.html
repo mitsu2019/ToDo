@@ -10,7 +10,7 @@
         .calendar-day { min-height: 100px; background-color: white; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
         .bg-dinner-yes { background-color: #dcfce7; border-left: 3px solid #22c55e; }
         .bg-dinner-no { background-color: #fee2e2; border-left: 3px solid #ef4444; }
-        .bg-has-plan { border-right: 3px solid #3b82f6; } /* 予定がある場合は右側に青線 */
+        .bg-has-plan { border-right: 3px solid #3b82f6; }
         .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: bold; }
         @media (max-width: 640px) { .calendar-day { min-height: 90px; font-size: 0.7rem; } }
     </style>
@@ -19,7 +19,7 @@
 
     <div id="app" class="max-w-4xl mx-auto p-4 pb-20">
         <header class="flex justify-center items-center py-4">
-            <h1 class="text-xl font-extrabold text-slate-700">晩ご飯・予定共有</h1>
+            <h1 id="title" class="text-xl font-extrabold text-slate-700">晩ご飯・予定共有</h1>
         </header>
 
         <div class="flex mb-4 border-b bg-white rounded-t-xl overflow-hidden shadow-sm">
@@ -92,7 +92,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const COLLECTION_NAME = "schedules_v2"; // データ構造が変わるためコレクション名を変更
+        const COLLECTION_NAME = "schedules_v2";
 
         let currentDate = new Date();
         let user = null;
@@ -100,7 +100,7 @@
         let selectedDateKey = null;
         let editState = { dinner: null, plan: null };
 
-        // --- 描画ロジック ---
+        // --- 描画関数 ---
         const renderAll = () => {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
@@ -114,4 +114,141 @@
             calContainer.innerHTML = '';
             for (let i = 0; i < firstDay; i++) calContainer.appendChild(document.createElement('div'));
 
-            for (let d = 1; d <= daysInMonth; d
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const data = scheduleData[dateKey] || {};
+                const dayEl = document.createElement('div');
+                dayEl.className = `calendar-day border-b border-r cursor-pointer ${data.dinner === 'dinner-yes' ? 'bg-dinner-yes' : data.dinner === 'dinner-no' ? 'bg-dinner-no' : ''} ${data.plan ? 'bg-has-plan' : ''}`;
+                
+                let labels = '';
+                if(data.dinner === 'dinner-yes') labels += '🍚';
+                if(data.dinner === 'dinner-no') labels += '✖';
+                if(data.plan === 'trip') labels += '✈';
+                if(data.plan === 'plan') labels += '📅';
+
+                dayEl.innerHTML = `
+                    <div class="text-[9px] font-bold text-slate-400">${d}</div>
+                    <div class="text-center text-xs">${labels}</div>
+                    <div class="text-[8px] text-slate-500 truncate">${data.comment || ''}</div>
+                `;
+                dayEl.onclick = () => window.openModal(dateKey);
+                calContainer.appendChild(dayEl);
+            }
+
+            // 週間リスト
+            const list = document.getElementById('batch-input-list');
+            list.innerHTML = '';
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const data = scheduleData[dateKey] || {};
+                const row = document.createElement('div');
+                row.className = 'p-3 bg-white rounded-xl border shadow-sm flex flex-col gap-2';
+                row.innerHTML = `
+                    <div class="flex justify-between font-bold text-xs">
+                        <span>${d}日</span>
+                        <span class="text-slate-400 text-[10px]">${data.comment || ''}</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-1">
+                        <button onclick="window.quickSave('${dateKey}', 'dinner', 'dinner-yes')" class="py-2 text-[10px] rounded-lg border ${data.dinner==='dinner-yes'?'bg-green-500 text-white':'bg-slate-50'}">いる</button>
+                        <button onclick="window.quickSave('${dateKey}', 'dinner', 'dinner-no')" class="py-2 text-[10px] rounded-lg border ${data.dinner==='dinner-no'?'bg-red-500 text-white':'bg-slate-50'}">不要</button>
+                        <button onclick="window.openModal('${dateKey}')" class="py-2 text-[10px] rounded-lg border ${data.plan==='trip'?'bg-yellow-400 text-white':'bg-slate-50'}">出張...</button>
+                        <button onclick="window.openModal('${dateKey}')" class="py-2 text-[10px] rounded-lg border ${data.plan==='plan'?'bg-blue-500 text-white':'bg-slate-50'}">予定...</button>
+                    </div>
+                `;
+                list.appendChild(row);
+            }
+        };
+
+        // --- グローバル関数設定 ---
+        window.openModal = (dateKey) => {
+            selectedDateKey = dateKey;
+            const data = scheduleData[dateKey] || { dinner: null, plan: null, comment: '' };
+            editState = { dinner: data.dinner, plan: data.plan };
+            document.getElementById('modal-date-title').textContent = dateKey;
+            document.getElementById('modal-comment').value = data.comment || '';
+            updateModalUI();
+            document.getElementById('edit-modal').classList.remove('hidden');
+        };
+
+        window.quickSave = async (dateKey, group, status) => {
+            if (!user) return;
+            const data = scheduleData[dateKey] || { dinner: null, plan: null, comment: '' };
+            const newValue = (data[group] === status) ? null : status;
+            const updated = { ...data, [group]: newValue, updatedAt: serverTimestamp() };
+            try {
+                await setDoc(doc(db, COLLECTION_NAME, dateKey), updated);
+            } catch (e) { console.error(e); }
+        };
+
+        const updateModalUI = () => {
+            document.querySelectorAll('.modal-btn').forEach(btn => {
+                const { group, status } = btn.dataset;
+                const isActive = editState[group] === status;
+                const activeColors = {
+                    'dinner-yes': 'bg-green-500 text-white',
+                    'dinner-no': 'bg-red-500 text-white',
+                    'trip': 'bg-yellow-400 text-white',
+                    'plan': 'bg-blue-500 text-white'
+                };
+                btn.className = `modal-btn py-3 rounded-xl font-bold transition-all ${isActive ? activeColors[status] : 'bg-slate-100 text-slate-400'}`;
+            });
+            const showComment = editState.plan === 'trip' || editState.plan === 'plan';
+            document.getElementById('modal-comment-container').classList.toggle('hidden', !showComment);
+        };
+
+        // --- イベントリスナー ---
+        document.querySelectorAll('.modal-btn').forEach(btn => {
+            btn.onclick = () => {
+                const { group, status } = btn.dataset;
+                editState[group] = (editState[group] === status) ? null : status;
+                updateModalUI();
+            };
+        });
+
+        document.getElementById('save-btn').onclick = async () => {
+            const comment = document.getElementById('modal-comment').value;
+            await setDoc(doc(db, COLLECTION_NAME, selectedDateKey), {
+                ...editState,
+                comment: comment.trim(),
+                updatedAt: serverTimestamp()
+            });
+            document.getElementById('edit-modal').classList.add('hidden');
+        };
+
+        document.getElementById('close-modal').onclick = () => document.getElementById('edit-modal').classList.add('hidden');
+        document.getElementById('prev-month').onclick = () => { currentDate.setMonth(currentDate.getMonth()-1); renderAll(); };
+        document.getElementById('next-month').onclick = () => { currentDate.setMonth(currentDate.getMonth()+1); renderAll(); };
+        
+        document.getElementById('btn-view-calendar').onclick = () => {
+            document.getElementById('view-calendar').classList.remove('hidden');
+            document.getElementById('view-batch').classList.add('hidden');
+            document.getElementById('btn-view-calendar').classList.add('tab-active');
+            document.getElementById('btn-view-batch').classList.remove('tab-active');
+        };
+        document.getElementById('btn-view-batch').onclick = () => {
+            document.getElementById('view-batch').classList.remove('hidden');
+            document.getElementById('view-calendar').classList.add('hidden');
+            document.getElementById('btn-view-batch').classList.add('tab-active');
+            document.getElementById('btn-view-calendar').classList.remove('tab-active');
+        };
+
+        // --- 認証とリアルタイム同期 ---
+        onAuthStateChanged(auth, (u) => {
+            user = u;
+            if (user) {
+                document.getElementById('title').style.color = '#22c55e';
+                onSnapshot(collection(db, COLLECTION_NAME), (snap) => {
+                    scheduleData = {};
+                    snap.forEach(d => scheduleData[d.id] = d.data());
+                    renderAll();
+                });
+            } else {
+                signInAnonymously(auth);
+            }
+        });
+
+        // 初回実行
+        renderAll();
+    </script>
+</body>
+</html>

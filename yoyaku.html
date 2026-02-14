@@ -26,7 +26,7 @@
 
     <div id="toast-container" class="fixed top-4 right-4 z-[110] flex flex-col gap-2"></div>
 
-    <!-- ログインビュー -->
+    <!-- Login View -->
     <div id="login-view" class="min-h-screen flex items-center justify-center p-4">
         <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
             <div class="text-center mb-8">
@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <!-- ユーザービュー -->
+    <!-- User View -->
     <div id="user-view" class="hidden min-h-screen flex flex-col">
         <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
@@ -98,7 +98,7 @@
         </main>
     </div>
 
-    <!-- 管理画面 -->
+    <!-- Admin View -->
     <div id="admin-view" class="hidden fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden">
         <header class="bg-gray-900 text-white shadow p-4 flex justify-between items-center shrink-0">
             <div class="flex items-center gap-2">
@@ -117,7 +117,7 @@
         </nav>
         
         <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
-            <!-- 献立設定タブ -->
+            <!-- Menus Tab -->
             <div id="tab-content-menus" class="tab-content active max-w-5xl mx-auto space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                     <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-file-import mr-2 text-blue-500"></i>献立名一括取込 (CSV)</h3>
@@ -140,7 +140,7 @@
                 <div id="admin-menu-list" class="space-y-3"></div>
             </div>
             
-            <!-- ユーザー管理タブ -->
+            <!-- Users Tab -->
             <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
@@ -168,20 +168,20 @@
                 </div>
             </div>
 
-            <!-- 予約統計タブ -->
+            <!-- Stats Tab -->
             <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-bold text-lg flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>
+                    <h3 class="font-bold text-lg flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細 (重複排除済)</h3>
                     <button onclick="renderStats()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50 transition">
-                        <i class="fas fa-sync-alt mr-1"></i> 最新に更新（再計算）
+                        <i class="fas fa-sync-alt mr-1"></i> 集計を更新
                     </button>
                 </div>
                 <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                    <!-- 集計内容がここに挿入される -->
+                    <!-- Stats content injected here -->
                 </div>
             </div>
 
-            <!-- システム設定タブ -->
+            <!-- Settings Tab -->
             <div id="tab-content-settings" class="tab-content max-w-2xl mx-auto">
                 <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
                     <h3 class="font-bold text-xl mb-6">共通予約締切設定</h3>
@@ -342,9 +342,17 @@
         }
 
         window.toggleOrder = async (dateKey, status) => {
-            const docId = `${currentUser.id}_${dateKey}`;
+            const docId = `${currentUser.id}_${dateKey}`; // Always use fixed format to prevent duplicates
             if (status) await setDoc(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
-            else await deleteDoc(doc(ordersCol, docId));
+            else {
+                // To be safe, delete the specific ID and any other duplicates for this user/date
+                await deleteDoc(doc(ordersCol, docId));
+                // Clean up any stray duplicates (historical)
+                const straySnap = await getDocs(query(ordersCol, where("userId", "==", currentUser.id), where("date", "==", dateKey)));
+                const batch = writeBatch(db);
+                straySnap.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
         };
 
         window.batchReserve = async (status) => {
@@ -494,38 +502,37 @@
             renderAdminUsers();
         };
 
-        // 予約統計の再計算ロジック
+        // Aggregation with Duplicate Removal
         window.renderStats = async () => {
             const container = document.getElementById('stats-container');
-            // ローディング中を表示
-            container.innerHTML = '<div class="text-center py-10"><div class="loader inline-block"></div><p class="text-xs text-gray-400 mt-2">最新の予約データを集計中...</p></div>';
+            container.innerHTML = '<div class="text-center py-10"><div class="loader inline-block"></div><p class="text-xs text-gray-400 mt-2">重複を排除して集計中...</p></div>';
             
             try {
-                // 1. サーバーから最新の予約データを全件取得（キャッシュを無視するために新規取得）
                 const ordersSnap = await getDocs(ordersCol);
                 
-                // 2. 集計用オブジェクトを初期化（積算を防ぐ）
-                const orderMap = {};
+                // key: date, value: Set of userIds (Sets automatically handle duplicates)
+                const uniqueOrdersMap = {};
                 
-                // 3. データを走査して日付ごとにカウント
                 ordersSnap.forEach(d => {
                     const o = d.data();
-                    if (o.date) {
-                        if (!orderMap[o.date]) orderMap[o.date] = 0;
-                        orderMap[o.date]++;
+                    if (o.date && o.userId) {
+                        if (!uniqueOrdersMap[o.date]) {
+                            uniqueOrdersMap[o.date] = new Set();
+                        }
+                        uniqueOrdersMap[o.date].add(o.userId);
                     }
                 });
 
-                // 4. 表示用のHTML構築
                 container.innerHTML = '';
-                const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
+                const sortedDates = Object.keys(uniqueOrdersMap).sort((a,b) => b.localeCompare(a));
                 
                 if(sortedDates.length === 0) {
-                    container.innerHTML = '<p class="text-center text-gray-400 py-10">現在、予約データはありません</p>';
+                    container.innerHTML = '<p class="text-center text-gray-400 py-10">予約データはありません</p>';
                     return;
                 }
 
                 sortedDates.forEach(date => {
+                    const count = uniqueOrdersMap[date].size;
                     const div = document.createElement('div');
                     div.className = "flex justify-between items-center border-b border-gray-100 p-4 hover:bg-gray-50 transition";
                     div.innerHTML = `
@@ -534,17 +541,17 @@
                             <span class="font-bold text-gray-700">${menuData[date]?.title || '献立未設定'}</span>
                         </div>
                         <div class="flex items-center gap-4">
-                            <span class="text-blue-600 font-black text-lg">${orderMap[date]}食</span>
+                            <span class="text-blue-600 font-black text-lg">${count}食</span>
                             <button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-black transition">CSV</button>
                         </div>
                     `;
                     container.appendChild(div);
                 });
                 
-                showToast("集計を更新しました", "success");
+                showToast("重複を排除して集計しました", "success");
             } catch (err) {
                 console.error(err);
-                container.innerHTML = '<p class="text-center text-red-500 py-10">集計に失敗しました。通信環境を確認してください。</p>';
+                container.innerHTML = '<p class="text-center text-red-500 py-10">エラーが発生しました</p>';
             }
         };
 

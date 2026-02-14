@@ -156,11 +156,15 @@
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, deleteDoc, query, where, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Config
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'meal-res-v1';
+        const firebaseConfig = {
+    apiKey: "AIzaSyCbLKiYVbZSNuyV_GKALHBhRYcrfLZyNdw",
+    authDomain: "yoyaku-4b66a.firebaseapp.com",
+    projectId: "yoyaku-4b66a",
+    storageBucket: "yoyaku-4b66a.firebasestorage.app",
+    messagingSenderId: "353551924907",
+    appId: "1:353551924907:web:b3edd452252ee8bb1181ee",
+    measurementId: "G-395PQWJSK2"
+  };
 
         // Paths
         const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');

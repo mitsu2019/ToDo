@@ -13,17 +13,15 @@
         }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #ffffff !important; font-weight: bold; }
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* スムーズなスクロール */
         html { scroll-behavior: smooth; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
-    <div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2"></div>
+    <div id="toast-container" class="fixed top-4 right-4 z-[110] flex flex-col gap-2"></div>
 
     <!-- ログインビュー -->
     <div id="login-view" class="min-h-screen flex items-center justify-center p-4">
@@ -33,26 +31,22 @@
                     <i class="fas fa-utensils text-2xl"></i>
                 </div>
                 <h1 class="text-2xl font-bold text-gray-800">社食予約システム</h1>
-                <p class="text-gray-500 text-sm mt-2">IDとパスワードを入力してログインしてください</p>
+                <p class="text-gray-500 text-sm mt-2">IDとパスワードを入力してください</p>
             </div>
             <form id="login-form" class="space-y-5">
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">ログインID</label>
-                    <input type="text" id="login-id" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="example" required>
+                    <input type="text" id="login-id" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin" required>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード</label>
-                    <input type="password" id="login-pass" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="••••••••" required>
+                    <input type="password" id="login-pass" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••••••" required>
                 </div>
                 <button type="submit" id="login-btn" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 font-bold flex justify-center items-center shadow-lg shadow-blue-200">
                     <span>ログイン</span>
                     <div id="login-loader" class="loader ml-2"></div>
                 </button>
             </form>
-            <div class="mt-8 pt-6 border-t border-gray-100 text-center">
-                <p class="text-xs text-gray-400 font-medium tracking-wider uppercase">Initial Credentials</p>
-                <p class="text-sm text-gray-500 mt-1">ID: <span class="font-mono bg-gray-100 px-1 rounded text-blue-600">admin</span> / Pass: <span class="font-mono bg-gray-100 px-1 rounded text-blue-600">admin</span></p>
-            </div>
         </div>
     </div>
 
@@ -61,7 +55,7 @@
         <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center space-x-3">
-                    <div class="bg-blue-600 text-white p-2 rounded-lg hidden md:block">
+                    <div class="bg-blue-600 text-white p-2 rounded-lg">
                         <i class="fas fa-calendar-alt"></i>
                     </div>
                     <h1 class="text-lg font-bold text-gray-800">予約カレンダー</h1>
@@ -74,7 +68,7 @@
                     <button id="admin-entry-btn" onclick="openAdmin()" class="hidden text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 px-3 py-2 rounded-lg border border-amber-200 font-bold transition">
                         <i class="fas fa-tools mr-1"></i> 管理
                     </button>
-                    <button onclick="location.reload()" class="text-xs text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg font-bold transition border border-transparent hover:border-red-100">
+                    <button onclick="location.reload()" class="text-xs text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg font-bold transition">
                         ログアウト
                     </button>
                 </div>
@@ -82,7 +76,7 @@
         </header>
 
         <main class="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full">
-            <!-- コントロールバー -->
+            <!-- ユーザー画面月選択 -->
             <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center sticky top-[72px] z-40">
                 <div class="flex items-center gap-4 bg-gray-50 rounded-xl p-1 px-2 border border-gray-100">
                     <button onclick="changeMonth(-1)" class="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded-lg transition">
@@ -94,23 +88,20 @@
                     </button>
                 </div>
                 <div class="flex gap-2 w-full sm:w-auto">
-                    <button onclick="batchReserve(true)" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-green-100 transition active:scale-95">
-                        <i class="fas fa-check-double mr-1"></i> 一括予約
+                    <button onclick="batchReserve(true)" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition">
+                        一括予約
                     </button>
-                    <button onclick="batchReserve(false)" class="flex-1 sm:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95">
-                        <i class="fas fa-times mr-1"></i> 一括解除
+                    <button onclick="batchReserve(false)" class="flex-1 sm:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl text-xs font-bold transition">
+                        一括解除
                     </button>
                 </div>
             </div>
 
-            <!-- カレンダーグリッド -->
-            <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
-                <!-- JavaScriptで生成 -->
-            </div>
+            <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20"></div>
         </main>
     </div>
 
-    <!-- 管理画面モーダル -->
+    <!-- 管理画面 -->
     <div id="admin-view" class="hidden fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden">
         <header class="bg-gray-900 text-white shadow p-4 flex justify-between items-center shrink-0">
             <div class="flex items-center gap-2">
@@ -126,27 +117,46 @@
             <button onclick="switchAdminTab('users')" id="tab-btn-users" class="tab-btn px-6 py-4 text-sm text-gray-400 whitespace-nowrap">ユーザー管理</button>
             <button onclick="switchAdminTab('stats')" id="tab-btn-stats" class="tab-btn px-6 py-4 text-sm text-gray-400 whitespace-nowrap">予約統計</button>
         </nav>
+        
         <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
-            <!-- 献立設定 -->
+            <!-- 献立設定タブ -->
             <div id="tab-content-menus" class="tab-content active max-w-4xl mx-auto">
-                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
-                    <p class="text-sm text-blue-800 font-medium">メニュー名や写真は自動的に保存されます。変更すると即座にユーザー画面へ反映されます。</p>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <button onclick="changeMonth(-1)" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200"><i class="fas fa-chevron-left"></i></button>
+                        <h3 id="admin-month-display" class="font-bold text-lg"></h3>
+                        <button onclick="changeMonth(1)" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <span class="text-xs text-gray-400">※変更は即時反映されます</span>
                 </div>
-                <div id="admin-menu-list" class="space-y-4"></div>
+                <div id="admin-menu-list" class="space-y-3"></div>
             </div>
             
-            <!-- ユーザー管理 -->
-            <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-8">
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                    <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-user-plus mr-2 text-blue-500"></i>新規ユーザー登録</h3>
-                    <form id="user-reg-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <input type="text" id="reg-id" placeholder="ID (社員番号等)" class="border border-gray-200 p-3 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition" required>
-                        <input type="text" id="reg-pass" placeholder="初期パスワード" class="border border-gray-200 p-3 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition" required>
-                        <input type="text" id="reg-name" placeholder="氏名" class="border border-gray-200 p-3 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition">
-                        <input type="text" id="reg-dept" placeholder="部署名" class="border border-gray-200 p-3 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition">
-                        <label class="flex items-center gap-2 px-3"><input type="checkbox" id="reg-isadmin" class="w-5 h-5 rounded accent-blue-600"> <span class="text-sm font-bold text-gray-600">管理者権限</span></label>
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-blue-50">追加する</button>
-                    </form>
+            <!-- ユーザー管理タブ -->
+            <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-user-plus mr-2 text-blue-500"></i>個別登録</h3>
+                        <form id="user-reg-form" class="space-y-3">
+                            <input type="text" id="reg-id" placeholder="ID" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
+                            <input type="text" id="reg-pass" placeholder="パスワード" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
+                            <input type="text" id="reg-name" placeholder="氏名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
+                            <input type="text" id="reg-dept" placeholder="部署名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
+                            <label class="flex items-center gap-2"><input type="checkbox" id="reg-isadmin"> <span class="text-xs">管理者権限</span></label>
+                            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold">追加</button>
+                        </form>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-file-csv mr-2 text-green-500"></i>一括操作 (CSV)</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-2">CSVファイルを選択 (形式: ID,Pass,Name,Dept,IsAdmin(0/1))</label>
+                                <input type="file" id="user-csv-file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                                <button onclick="importUserCSV()" class="mt-3 w-full bg-green-600 text-white py-2 rounded-lg text-sm font-bold">CSVからインポート</button>
+                            </div>
+                            <button onclick="exportUserCSV()" class="w-full bg-white border border-green-600 text-green-600 py-2 rounded-lg text-sm font-bold hover:bg-green-50">ユーザー一覧をCSV保存</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
@@ -155,14 +165,8 @@
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
-                            <thead class="bg-gray-50 text-gray-400 text-[11px] uppercase tracking-wider">
-                                <tr>
-                                    <th class="p-4 font-bold">ログインID</th>
-                                    <th class="p-4 font-bold">部署</th>
-                                    <th class="p-4 font-bold">氏名</th>
-                                    <th class="p-4 font-bold">権限</th>
-                                    <th class="p-4 font-bold text-center">操作</th>
-                                </tr>
+                            <thead class="bg-gray-50 text-gray-400 text-[10px] uppercase">
+                                <tr><th class="p-4">ID</th><th class="p-4">部署</th><th class="p-4">氏名</th><th class="p-4">権限</th><th class="p-4 text-center">操作</th></tr>
                             </thead>
                             <tbody id="user-list-tbody" class="divide-y divide-gray-100"></tbody>
                         </table>
@@ -170,10 +174,10 @@
                 </div>
             </div>
 
-            <!-- 予約統計 -->
+            <!-- 予約統計タブ -->
             <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
-                <div id="stats-container" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                    <div class="text-center py-20 text-gray-400">データを読み込み中...</div>
+                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <p class="text-gray-400 text-center py-10">読み込み中...</p>
                 </div>
             </div>
         </main>
@@ -184,7 +188,6 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, where, deleteDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase設定
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyCbLKiYVbZSNuyV_GKALHBhRYcrfLZyNdw",
             authDomain: "yoyaku-4b66a.firebaseapp.com",
@@ -197,25 +200,24 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-
-        // パス定義（Artifactsルール準拠）
-        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'shokudo-yoyaku-v1';
-        const usersCol = collection(db, 'artifacts', currentAppId, 'public', 'data', 'users');
-        const ordersCol = collection(db, 'artifacts', currentAppId, 'public', 'data', 'orders');
-        const menusCol = collection(db, 'artifacts', currentAppId, 'public', 'data', 'menus');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'shokudo-yoyaku-v2';
+        
+        const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+        const ordersCol = collection(db, 'artifacts', appId, 'public', 'data', 'orders');
+        const menusCol = collection(db, 'artifacts', appId, 'public', 'data', 'menus');
 
         let currentUser = null;
         let myOrders = {};
         let menuData = {};
         let viewDate = new Date();
 
-        // 初期認証
+        // 初期化
         async function init() {
-            try { await signInAnonymously(auth); } catch (e) { console.error("Firebase Auth Error", e); }
+            await signInAnonymously(auth);
         }
         init();
 
-        // ログイン処理
+        // ログイン
         document.getElementById('login-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('login-id').value.trim();
@@ -223,25 +225,23 @@
             
             toggleLoader(true);
             try {
-                // 初期管理者作成
-                if (id === 'admin') {
+                if (id === 'admin' && pass === 'admin') {
                     const adminRef = doc(usersCol, 'admin');
                     const snap = await getDoc(adminRef);
                     if (!snap.exists()) {
-                        await setDoc(adminRef, { id: 'admin', password: 'admin', name: '管理者', department: 'システム', isAdmin: true });
+                        await setDoc(adminRef, { id: 'admin', password: 'admin', name: 'システム管理者', department: '情報システム', isAdmin: true });
                     }
                 }
 
                 const uSnap = await getDoc(doc(usersCol, id));
                 if (uSnap.exists() && uSnap.data().password === pass) {
                     currentUser = uSnap.data();
-                    showToast("ログインに成功しました", "success");
                     startApp();
                 } else {
-                    showToast("IDまたはパスワードが正しくありません", "error");
+                    showToast("IDまたはパスワードが違います", "error");
                 }
             } catch (err) {
-                showToast("データベースへの接続に失敗しました", "error");
+                showToast("エラーが発生しました", "error");
             } finally {
                 toggleLoader(false);
             }
@@ -251,82 +251,66 @@
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('user-view').classList.remove('hidden');
             document.getElementById('user-name').innerText = currentUser.name;
-            document.getElementById('user-dept').innerText = currentUser.department || '';
-            
+            document.getElementById('user-dept').innerText = currentUser.department;
             if (currentUser.isAdmin) document.getElementById('admin-entry-btn').classList.remove('hidden');
 
-            updateMonthDisplay();
+            updateDisplays();
 
-            // リアルタイムリスナー
             onSnapshot(menusCol, (snap) => {
                 menuData = {};
                 snap.forEach(d => menuData[d.id] = d.data());
                 renderCalendar();
-            }, (err) => console.error("Menu Sync Error", err));
+            });
 
             onSnapshot(query(ordersCol, where("userId", "==", currentUser.id)), (snap) => {
                 myOrders = {};
                 snap.forEach(d => myOrders[d.data().date] = true);
                 renderCalendar();
-            }, (err) => console.error("Order Sync Error", err));
+            });
         }
 
         window.changeMonth = (diff) => {
             viewDate.setMonth(viewDate.getMonth() + diff);
-            updateMonthDisplay();
+            updateDisplays();
             renderCalendar();
             if(!document.getElementById('admin-view').classList.contains('hidden')) renderAdminMenus();
         };
 
-        function updateMonthDisplay() {
-            document.getElementById('current-month-display').innerText = `${viewDate.getFullYear()}年${viewDate.getMonth()+1}月`;
+        function updateDisplays() {
+            const txt = `${viewDate.getFullYear()}年${viewDate.getMonth()+1}月`;
+            document.getElementById('current-month-display').innerText = txt;
+            document.getElementById('admin-month-display').innerText = txt;
         }
 
         function renderCalendar() {
             const grid = document.getElementById('calendar-grid');
             grid.innerHTML = '';
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const weekDays = ['日','月','火','水','木','金','土'];
-            
-            const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            const todayStr = new Date().toISOString().split('T')[0];
 
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d);
-                const dayOfWeek = dateObj.getDay();
-                const isReserved = myOrders[dateKey];
+            for (let d = 1; d <= days; d++) {
+                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
+                const isReserved = myOrders[dateKey];
                 const isPast = dateKey < todayStr;
-                
-                const card = document.createElement('div');
-                card.className = `group bg-white p-5 rounded-2xl shadow-sm border transition-all duration-300 hover:shadow-md ${isReserved ? 'border-green-500 bg-green-50 ring-4 ring-green-50' : 'border-gray-100'} ${menu.isHoliday ? 'opacity-50 grayscale bg-gray-50' : ''}`;
-                
-                let dayColor = "text-gray-800";
-                if(dayOfWeek === 0) dayColor = "text-red-500";
-                if(dayOfWeek === 6) dayColor = "text-blue-500";
+                const isHoliday = menu.isHoliday || false;
 
+                const card = document.createElement('div');
+                card.className = `bg-white p-4 rounded-xl border transition ${isReserved ? 'border-green-500 bg-green-50' : 'border-gray-200'} ${isHoliday ? 'opacity-50' : ''}`;
                 card.innerHTML = `
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="flex flex-col">
-                            <span class="text-2xl font-black ${dayColor}">${d}</span>
-                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${weekDays[dayOfWeek]}曜日</span>
-                        </div>
-                        ${isReserved ? '<div class="bg-green-500 text-white p-1.5 rounded-full shadow-lg shadow-green-200"><i class="fas fa-check text-[10px]"></i></div>' : ''}
+                    <div class="flex justify-between mb-2">
+                        <span class="text-xl font-bold">${d}日</span>
+                        ${isReserved ? '<i class="fas fa-check-circle text-green-500"></i>' : ''}
                     </div>
-                    <div class="aspect-[4/3] bg-gray-50 rounded-xl mb-4 overflow-hidden flex items-center justify-center border border-gray-100">
-                        ${menu.image ? `<img src="${menu.image}" class="w-full h-full object-cover transform transition group-hover:scale-110">` : '<i class="fas fa-utensils text-gray-200 text-3xl"></i>'}
+                    <div class="aspect-video bg-gray-100 rounded-lg mb-2 overflow-hidden flex items-center justify-center">
+                        ${menu.image ? `<img src="${menu.image}" class="w-full h-full object-cover">` : '<i class="fas fa-utensils text-gray-300"></i>'}
                     </div>
-                    <div class="text-sm font-black mb-5 text-gray-700 h-10 line-clamp-2 leading-snug">
-                        ${menu.isHoliday ? '<span class="text-gray-400">休業日</span>' : (menu.title || '<span class="text-gray-300 font-normal">メニュー未定</span>')}
-                    </div>
-                    ${!isPast && !menu.isHoliday ? `
-                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-3 rounded-xl text-xs font-black transition-all active:scale-95 ${isReserved ? 'bg-white border-2 border-red-400 text-red-500 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100'}">
-                            ${isReserved ? 'キャンセルする' : 'この日を予約する'}
+                    <div class="text-sm font-bold mb-3 h-8 line-clamp-2">${isHoliday ? '（お休み）' : (menu.title || 'メニュー未定')}</div>
+                    ${!isPast && !isHoliday ? `
+                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2 rounded-lg text-xs font-bold ${isReserved ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-blue-600 text-white'}">
+                            ${isReserved ? '取消' : '予約'}
                         </button>
-                    ` : `<div class="text-center text-[10px] font-bold text-gray-400 py-3 bg-gray-100 rounded-xl border border-dashed border-gray-200 uppercase tracking-widest">${isPast ? '受付終了' : '予約不可'}</div>`}
+                    ` : '<div class="text-center text-[10px] text-gray-400 py-2">受付不可</div>'}
                 `;
                 grid.appendChild(card);
             }
@@ -334,64 +318,51 @@
 
         window.toggleOrder = async (date, status) => {
             const id = `${currentUser.id}_${date}`;
-            const ref = doc(ordersCol, id);
             try {
                 if (status) {
-                    await setDoc(ref, { userId: currentUser.id, userName: currentUser.name, department: currentUser.department || '', date, timestamp: serverTimestamp() });
-                    showToast(`${date} を予約しました`, "success");
+                    await setDoc(doc(ordersCol, id), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date, timestamp: serverTimestamp() });
                 } else {
-                    await deleteDoc(ref);
-                    showToast(`${date} の予約を取消しました`, "success");
+                    await deleteDoc(doc(ordersCol, id));
                 }
-            } catch (e) { showToast("通信エラーが発生しました", "error"); }
+            } catch (e) { showToast("更新エラー", "error"); }
         };
 
         window.batchReserve = async (status) => {
             const batch = writeBatch(db);
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
+            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            const todayStr = new Date().toISOString().split('T')[0];
             let count = 0;
-            for(let d=1; d<=daysInMonth; d++){
-                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                if (dateKey < todayStr) continue; 
-                const menu = menuData[dateKey] || {};
-                if (menu.isHoliday) continue;
+
+            for (let d = 1; d <= days; d++) {
+                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                if (dateKey < todayStr) continue;
+                if (menuData[dateKey]?.isHoliday) continue;
 
                 const id = `${currentUser.id}_${dateKey}`;
-                if (status && !myOrders[dateKey]) { 
-                    batch.set(doc(ordersCol, id), { userId: currentUser.id, userName: currentUser.name, date: dateKey, timestamp: serverTimestamp() }); 
-                    count++; 
-                }
-                else if (!status && myOrders[dateKey]) { 
-                    batch.delete(doc(ordersCol, id)); 
-                    count++; 
+                if (status && !myOrders[dateKey]) {
+                    batch.set(doc(ordersCol, id), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date, timestamp: serverTimestamp() });
+                    count++;
+                } else if (!status && myOrders[dateKey]) {
+                    batch.delete(doc(ordersCol, id));
+                    count++;
                 }
             }
             await batch.commit();
-            showToast(`${count}件の予約状況を更新しました`, "success");
+            showToast(`${count}件更新しました`, "success");
         };
 
-        // 管理者ロジック
+        // 管理画面
         window.openAdmin = () => {
             document.getElementById('admin-view').classList.remove('hidden');
             switchAdminTab('menus');
         };
         window.closeAdmin = () => document.getElementById('admin-view').classList.add('hidden');
-        
+
         window.switchAdminTab = (name) => {
             document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(e => {
-                e.classList.remove('active', 'text-white');
-                e.classList.add('text-gray-400');
-            });
+            document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
             document.getElementById(`tab-content-${name}`).classList.add('active');
-            const btn = document.getElementById(`tab-btn-${name}`);
-            btn.classList.add('active', 'text-white');
-            btn.classList.remove('text-gray-400');
+            document.getElementById(`tab-btn-${name}`).classList.add('active');
 
             if (name === 'menus') renderAdminMenus();
             if (name === 'users') renderAdminUsers();
@@ -401,29 +372,22 @@
         function renderAdminMenus() {
             const list = document.getElementById('admin-menu-list');
             list.innerHTML = '';
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
 
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            for (let d = 1; d <= days; d++) {
+                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
                 const div = document.createElement('div');
-                div.className = "flex flex-col md:flex-row gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 items-center";
+                div.className = "flex gap-3 bg-white p-3 rounded-xl border border-gray-100 items-center";
                 div.innerHTML = `
-                    <div class="w-full md:w-32 font-black text-gray-400 text-lg">${dateKey}</div>
-                    <div class="flex-grow w-full flex gap-3">
-                        <input type="text" placeholder="献立名を入力..." value="${menu.title || ''}" onchange="saveMenuField('${dateKey}', 'title', this.value)" class="flex-grow border border-gray-100 p-3 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition bg-gray-50">
-                        <label class="bg-blue-50 text-blue-500 hover:bg-blue-100 w-12 h-12 flex items-center justify-center rounded-xl cursor-pointer transition shrink-0">
-                            <i class="fas fa-camera"></i>
-                            <input type="file" class="hidden" onchange="uploadImage('${dateKey}', this)">
-                        </label>
-                        <label class="flex items-center gap-2 bg-gray-100 px-4 rounded-xl cursor-pointer shrink-0">
-                            <input type="checkbox" ${menu.isHoliday?'checked':''} onchange="saveMenuField('${dateKey}', 'isHoliday', this.checked)" class="w-5 h-5 accent-gray-600">
-                            <span class="text-xs font-black text-gray-500">休業</span>
-                        </label>
-                    </div>
-                    ${menu.image ? `<img src="${menu.image}" class="h-12 w-20 object-cover rounded-lg border border-gray-100 shadow-sm">` : ''}
+                    <div class="w-12 text-xs font-bold text-gray-400">${d}日</div>
+                    <input type="text" value="${menu.title || ''}" onchange="saveMenuField('${dateKey}', 'title', this.value)" placeholder="献立名" class="flex-grow border-none bg-gray-50 p-2 text-sm rounded-lg outline-none">
+                    <label class="bg-blue-50 text-blue-500 w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer shrink-0">
+                        <i class="fas fa-camera"></i>
+                        <input type="file" class="hidden" onchange="uploadImage('${dateKey}', this)">
+                    </label>
+                    <label class="flex items-center gap-1 shrink-0"><input type="checkbox" ${menu.isHoliday?'checked':''} onchange="saveMenuField('${dateKey}', 'isHoliday', this.checked)"> <span class="text-[10px]">休業</span></label>
+                    ${menu.image ? `<img src="${menu.image}" class="h-10 w-10 object-cover rounded shadow-sm">` : ''}
                 `;
                 list.appendChild(div);
             }
@@ -442,15 +406,12 @@
                 img.src = e.target.result;
                 img.onload = async () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 500;
-                    const scale = MAX_WIDTH / img.width;
-                    canvas.width = MAX_WIDTH;
+                    const scale = 400 / img.width;
+                    canvas.width = 400;
                     canvas.height = img.height * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
                     const base64 = canvas.toDataURL('image/jpeg', 0.6);
                     await setDoc(doc(menusCol, date), { image: base64 }, { merge: true });
-                    showToast("写真を更新しました", "success");
                     renderAdminMenus();
                 };
             };
@@ -466,26 +427,11 @@
                 count++;
                 const u = d.data();
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition";
-                tr.innerHTML = `
-                    <td class="p-4 font-mono font-bold text-gray-600">${u.id}</td>
-                    <td class="p-4 text-gray-400 text-xs font-bold">${u.department||'-'}</td>
-                    <td class="p-4 font-black text-gray-800">${u.name||'-'}</td>
-                    <td class="p-4">${u.isAdmin?'<span class="bg-amber-100 text-amber-600 text-[10px] px-2 py-1 rounded-full font-black uppercase">Admin</span>':'-'}</td>
-                    <td class="p-4 text-center">
-                        ${u.id !== 'admin' ? `<button onclick="deleteUser('${u.id}')" class="w-8 h-8 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition"><i class="fas fa-trash-alt"></i></button>` : ''}
-                    </td>`;
+                tr.innerHTML = `<td class="p-4 font-bold">${u.id}</td><td class="p-4 text-gray-500">${u.department||'-'}</td><td class="p-4">${u.name||'-'}</td><td class="p-4">${u.isAdmin?'管理者':'-'}</td><td class="p-4 text-center">${u.id!=='admin'?`<button onclick="deleteUser('${u.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>`:''}</td>`;
                 tbody.appendChild(tr);
             });
-            document.getElementById('user-count-badge').innerText = `${count} 名`;
+            document.getElementById('user-count-badge').innerText = `${count}名`;
         }
-
-        window.deleteUser = async (id) => {
-            if (confirm(`ユーザー [${id}] を完全に削除しますか？`)) {
-                await deleteDoc(doc(usersCol, id));
-                renderAdminUsers();
-            }
-        };
 
         document.getElementById('user-reg-form').onsubmit = async (e) => {
             e.preventDefault();
@@ -494,55 +440,113 @@
             const name = document.getElementById('reg-name').value.trim();
             const dept = document.getElementById('reg-dept').value.trim();
             const isAdmin = document.getElementById('reg-isadmin').checked;
-
             await setDoc(doc(usersCol, id), { id, password: pass, name, department: dept, isAdmin });
-            showToast("ユーザーを新規登録しました", "success");
+            showToast("登録しました", "success");
             e.target.reset();
             renderAdminUsers();
         };
 
-        async function renderStats() {
-            const snap = await getDocs(ordersCol);
-            const stats = {};
+        // --- CSV機能 ---
+        window.exportUserCSV = async () => {
+            const snap = await getDocs(usersCol);
+            let csv = "ID,パスワード,氏名,部署名,管理者権限(1=管理者)\n";
             snap.forEach(d => {
+                const u = d.data();
+                csv += `${u.id},${u.password},${u.name},${u.department},${u.isAdmin?1:0}\n`;
+            });
+            downloadCSV(csv, "user_list.csv");
+        };
+
+        window.importUserCSV = () => {
+            const file = document.getElementById('user-csv-file').files[0];
+            if (!file) return showToast("ファイルを選択してください", "error");
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const rows = e.target.result.split('\n').slice(1);
+                const batch = writeBatch(db);
+                let count = 0;
+                rows.forEach(row => {
+                    const cols = row.split(',');
+                    if (cols.length >= 2 && cols[0].trim()) {
+                        const id = cols[0].trim();
+                        batch.set(doc(usersCol, id), {
+                            id: id,
+                            password: cols[1]?.trim() || 'password',
+                            name: cols[2]?.trim() || '',
+                            department: cols[3]?.trim() || '',
+                            isAdmin: cols[4]?.trim() === '1'
+                        });
+                        count++;
+                    }
+                });
+                await batch.commit();
+                showToast(`${count}名のユーザーをインポートしました`, "success");
+                renderAdminUsers();
+            };
+            reader.readAsText(file);
+        };
+
+        async function renderStats() {
+            const ordersSnap = await getDocs(ordersCol);
+            const orderMap = {};
+            ordersSnap.forEach(d => {
                 const o = d.data();
-                stats[o.date] = (stats[o.date] || 0) + 1;
+                if (!orderMap[o.date]) orderMap[o.date] = 0;
+                orderMap[o.date]++;
             });
 
             const container = document.getElementById('stats-container');
-            container.innerHTML = `
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="font-black text-2xl text-gray-800">予約数集計</h3>
-                    <div class="bg-gray-100 p-1 rounded-lg flex text-[10px] font-bold">
-                        <span class="bg-white px-3 py-1 rounded shadow-sm text-blue-600 uppercase">Daily List</span>
-                    </div>
-                </div>
-            `;
+            container.innerHTML = `<h3 class="font-bold mb-4">予約統計</h3>`;
             
-            const sortedDates = Object.keys(stats).sort((a,b) => b.localeCompare(a));
-            if(sortedDates.length === 0) {
-                container.innerHTML += '<div class="text-center py-20 text-gray-300"><i class="fas fa-database mb-4 text-4xl block"></i>集計可能なデータがありません</div>';
+            const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
+            if (sortedDates.length === 0) {
+                container.innerHTML += '<p class="text-center text-gray-400 py-10">データなし</p>';
                 return;
             }
 
-            const list = document.createElement('div');
-            list.className = "space-y-3";
             sortedDates.forEach(date => {
-                const item = document.createElement('div');
-                item.className = "flex justify-between p-4 bg-gray-50 rounded-2xl items-center border border-gray-100";
-                item.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <div class="w-2 h-2 rounded-full bg-blue-500"></div>
-                        <span class="font-black text-gray-600 tracking-tighter">${date}</span>
-                    </div>
-                    <div class="flex items-baseline gap-1 font-black text-blue-700">
-                        <span class="text-2xl">${stats[date]}</span>
-                        <span class="text-[10px] uppercase text-gray-400">Meals</span>
-                    </div>
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center border-b p-3 hover:bg-gray-50 transition";
+                div.innerHTML = `
+                    <div class="font-bold">${date} <span class="ml-4 text-blue-600">${orderMap[date]}件</span></div>
+                    <button onclick="downloadDailyOrderCSV('${date}')" class="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-black transition">
+                        <i class="fas fa-download mr-1"></i> 詳細CSV
+                    </button>
                 `;
-                list.appendChild(item);
+                container.appendChild(div);
             });
-            container.appendChild(list);
+        }
+
+        window.downloadDailyOrderCSV = async (date) => {
+            const [usersSnap, ordersSnap] = await Promise.all([
+                getDocs(usersCol),
+                getDocs(query(ordersCol, where("date", "==", date)))
+            ]);
+
+            const reservedUserIds = new Set();
+            ordersSnap.forEach(d => reservedUserIds.add(d.data().userId));
+
+            let csv = "ID,部署名,氏名,予約の有無\n";
+            usersSnap.forEach(d => {
+                const u = d.data();
+                if (u.id === 'admin') return;
+                const status = reservedUserIds.has(u.id) ? "予約あり" : "なし";
+                csv += `${u.id},${u.department||''},${u.name||''},${status}\n`;
+            });
+
+            downloadCSV(csv, `orders_${date}.csv`);
+        };
+
+        function downloadCSV(content, filename) {
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([bom, content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function toggleLoader(show) {
@@ -553,19 +557,23 @@
         function showToast(msg, type) {
             const container = document.getElementById('toast-container');
             const t = document.createElement('div');
-            t.className = `p-4 rounded-2xl shadow-2xl text-white text-sm font-black flex items-center transition-all duration-500 transform translate-y-4 opacity-0 ${type==='success'?'bg-gray-900 border-l-4 border-green-500':'bg-red-600'}`;
-            t.innerHTML = `<i class="fas ${type==='success'?'fa-check-circle text-green-400':'fa-exclamation-circle'} mr-3"></i> ${msg}`;
+            t.className = `p-4 rounded-xl shadow-lg text-white text-xs font-bold transition-all duration-300 transform translate-y-2 opacity-0 ${type==='success'?'bg-gray-800':'bg-red-500'}`;
+            t.innerText = msg;
             container.appendChild(t);
-            
+            setTimeout(() => t.classList.remove('translate-y-2', 'opacity-0'), 10);
             setTimeout(() => {
-                t.classList.remove('translate-y-4', 'opacity-0');
-            }, 10);
-
-            setTimeout(() => {
-                t.classList.add('translate-x-full', 'opacity-0');
-                setTimeout(() => t.remove(), 500);
+                t.classList.add('opacity-0');
+                setTimeout(() => t.remove(), 300);
             }, 3000);
         }
+
+        window.deleteUser = async (id) => {
+            if (confirm(`${id} を削除しますか？`)) {
+                await deleteDoc(doc(usersCol, id));
+                renderAdminUsers();
+            }
+        };
+
     </script>
 </body>
 </html>

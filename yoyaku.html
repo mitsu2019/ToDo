@@ -19,8 +19,6 @@
         
         .day-sat { color: #2563eb; }
         .day-sun { color: #dc2626; }
-        
-        /* Image Preview Style */
         .img-preview { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; }
     </style>
 </head>
@@ -172,7 +170,15 @@
 
             <!-- 予約統計タブ -->
             <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
-                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200"></div>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>
+                    <button onclick="renderStats()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50 transition">
+                        <i class="fas fa-sync-alt mr-1"></i> 最新に更新（再計算）
+                    </button>
+                </div>
+                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <!-- 集計内容がここに挿入される -->
+                </div>
             </div>
 
             <!-- システム設定タブ -->
@@ -479,37 +485,68 @@
 
         window.deleteUserWithOrders = async (id) => {
             if (!confirm(`ユーザー ${id} とその全予約データを削除しますか？`)) return;
-            
-            // 予約データの削除
             const oSnap = await getDocs(query(ordersCol, where("userId", "==", id)));
             const batch = writeBatch(db);
             oSnap.forEach(d => batch.delete(d.ref));
-            
-            // ユーザー自体の削除
             batch.delete(doc(usersCol, id));
-            
             await batch.commit();
             showToast("削除完了しました", "success");
             renderAdminUsers();
         };
 
-        async function renderStats() {
+        // 予約統計の再計算ロジック
+        window.renderStats = async () => {
             const container = document.getElementById('stats-container');
-            container.innerHTML = '<div class="text-center p-10"><div class="loader inline-block"></div><p class="text-xs text-gray-400 mt-2">集計中...</p></div>';
-            const ordersSnap = await getDocs(ordersCol);
-            const orderMap = {};
-            ordersSnap.forEach(d => { const o = d.data(); if (!orderMap[o.date]) orderMap[o.date] = 0; orderMap[o.date]++; });
+            // ローディング中を表示
+            container.innerHTML = '<div class="text-center py-10"><div class="loader inline-block"></div><p class="text-xs text-gray-400 mt-2">最新の予約データを集計中...</p></div>';
             
-            container.innerHTML = `<h3 class="font-bold mb-4 flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>`;
-            const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
-            if(sortedDates.length === 0) { container.innerHTML += '<p class="text-center text-gray-400 py-10">データがありません</p>'; return; }
-            sortedDates.forEach(date => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center border-b p-4 hover:bg-gray-50 transition";
-                div.innerHTML = `<div class="font-bold text-gray-700">${date} <span class="ml-4 text-blue-600 font-black">${orderMap[date]}食</span></div><button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold">CSV出力</button>`;
-                container.appendChild(div);
-            });
-        }
+            try {
+                // 1. サーバーから最新の予約データを全件取得（キャッシュを無視するために新規取得）
+                const ordersSnap = await getDocs(ordersCol);
+                
+                // 2. 集計用オブジェクトを初期化（積算を防ぐ）
+                const orderMap = {};
+                
+                // 3. データを走査して日付ごとにカウント
+                ordersSnap.forEach(d => {
+                    const o = d.data();
+                    if (o.date) {
+                        if (!orderMap[o.date]) orderMap[o.date] = 0;
+                        orderMap[o.date]++;
+                    }
+                });
+
+                // 4. 表示用のHTML構築
+                container.innerHTML = '';
+                const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
+                
+                if(sortedDates.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-400 py-10">現在、予約データはありません</p>';
+                    return;
+                }
+
+                sortedDates.forEach(date => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center border-b border-gray-100 p-4 hover:bg-gray-50 transition";
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="text-gray-400 text-xs font-mono">${date}</span>
+                            <span class="font-bold text-gray-700">${menuData[date]?.title || '献立未設定'}</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-blue-600 font-black text-lg">${orderMap[date]}食</span>
+                            <button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold hover:bg-black transition">CSV</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                
+                showToast("集計を更新しました", "success");
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<p class="text-center text-red-500 py-10">集計に失敗しました。通信環境を確認してください。</p>';
+            }
+        };
 
         window.downloadDailyOrderCSV = async (date) => {
             const [uSnap, oSnap] = await Promise.all([getDocs(usersCol), getDocs(query(ordersCol, where("date", "==", date)))]);

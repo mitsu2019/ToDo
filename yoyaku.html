@@ -119,7 +119,6 @@
         </nav>
         
         <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
-            <!-- 献立設定タブ -->
             <div id="tab-content-menus" class="tab-content active max-w-4xl mx-auto">
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-between items-center">
                     <div class="flex items-center gap-3">
@@ -132,7 +131,6 @@
                 <div id="admin-menu-list" class="space-y-3"></div>
             </div>
             
-            <!-- ユーザー管理タブ -->
             <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
@@ -174,7 +172,6 @@
                 </div>
             </div>
 
-            <!-- 予約統計タブ -->
             <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
                 <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                     <p class="text-gray-400 text-center py-10">読み込み中...</p>
@@ -211,13 +208,11 @@
         let menuData = {};
         let viewDate = new Date();
 
-        // 初期化
         async function init() {
             await signInAnonymously(auth);
         }
         init();
 
-        // ログイン
         document.getElementById('login-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('login-id').value.trim();
@@ -286,43 +281,64 @@
             const grid = document.getElementById('calendar-grid');
             grid.innerHTML = '';
             const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            const todayStr = new Date().toISOString().split('T')[0];
+            const today = new Date();
+            today.setHours(0,0,0,0);
 
             for (let d = 1; d <= days; d++) {
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
                 const isReserved = myOrders[dateKey];
-                const isPast = dateKey < todayStr;
+                
+                const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+                const isPast = cardDate < today;
                 const isHoliday = menu.isHoliday || false;
 
                 const card = document.createElement('div');
                 card.className = `bg-white p-4 rounded-xl border transition ${isReserved ? 'border-green-500 bg-green-50' : 'border-gray-200'} ${isHoliday ? 'opacity-50' : ''}`;
+                
+                let badge = "";
+                if (isReserved) {
+                    badge = `<span class="bg-green-100 text-green-600 px-2 py-0.5 rounded text-[10px] font-bold"><i class="fas fa-check mr-1"></i>予約済</span>`;
+                } else if (isPast || isHoliday) {
+                    badge = `<span class="bg-gray-100 text-gray-400 px-2 py-0.5 rounded text-[10px] font-bold">未予約</span>`;
+                }
+
                 card.innerHTML = `
-                    <div class="flex justify-between mb-2">
+                    <div class="flex justify-between items-start mb-2">
                         <span class="text-xl font-bold">${d}日</span>
-                        ${isReserved ? '<i class="fas fa-check-circle text-green-500"></i>' : ''}
+                        ${badge}
                     </div>
                     <div class="aspect-video bg-gray-100 rounded-lg mb-2 overflow-hidden flex items-center justify-center">
                         ${menu.image ? `<img src="${menu.image}" class="w-full h-full object-cover">` : '<i class="fas fa-utensils text-gray-300"></i>'}
                     </div>
                     <div class="text-sm font-bold mb-3 h-8 line-clamp-2">${isHoliday ? '（お休み）' : (menu.title || 'メニュー未定')}</div>
                     ${!isPast && !isHoliday ? `
-                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2 rounded-lg text-xs font-bold ${isReserved ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-blue-600 text-white'}">
+                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2 rounded-lg text-xs font-bold ${isReserved ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-blue-600 text-white shadow-md'}">
                             ${isReserved ? '取消' : '予約'}
                         </button>
-                    ` : '<div class="text-center text-[10px] text-gray-400 py-2">受付不可</div>'}
+                    ` : `
+                        <div class="text-center py-2 bg-gray-50 rounded-lg text-[10px] text-gray-500 font-semibold">
+                            ${isHoliday ? '休業日のため受付不可' : '受付期間終了'}
+                        </div>
+                    `}
                 `;
                 grid.appendChild(card);
             }
         }
 
-        window.toggleOrder = async (date, status) => {
-            const id = `${currentUser.id}_${date}`;
+        window.toggleOrder = async (dateKey, status) => {
+            const docId = `${currentUser.id}_${dateKey}`;
             try {
                 if (status) {
-                    await setDoc(doc(ordersCol, id), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date, timestamp: serverTimestamp() });
+                    await setDoc(doc(ordersCol, docId), { 
+                        userId: currentUser.id, 
+                        userName: currentUser.name, 
+                        department: currentUser.department, 
+                        date: dateKey, 
+                        timestamp: serverTimestamp() 
+                    });
                 } else {
-                    await deleteDoc(doc(ordersCol, id));
+                    await deleteDoc(doc(ordersCol, docId));
                 }
             } catch (e) { showToast("更新エラー", "error"); }
         };
@@ -330,28 +346,41 @@
         window.batchReserve = async (status) => {
             const batch = writeBatch(db);
             const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            const todayStr = new Date().toISOString().split('T')[0];
+            const today = new Date();
+            today.setHours(0,0,0,0);
             let count = 0;
 
             for (let d = 1; d <= days; d++) {
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                if (dateKey < todayStr) continue;
+                const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+                
+                if (cardDate < today) continue;
                 if (menuData[dateKey]?.isHoliday) continue;
 
-                const id = `${currentUser.id}_${dateKey}`;
+                const docId = `${currentUser.id}_${dateKey}`;
                 if (status && !myOrders[dateKey]) {
-                    batch.set(doc(ordersCol, id), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date, timestamp: serverTimestamp() });
+                    batch.set(doc(ordersCol, docId), { 
+                        userId: currentUser.id, 
+                        userName: currentUser.name, 
+                        department: currentUser.department, 
+                        date: dateKey, 
+                        timestamp: serverTimestamp() 
+                    });
                     count++;
                 } else if (!status && myOrders[dateKey]) {
-                    batch.delete(doc(ordersCol, id));
+                    batch.delete(doc(ordersCol, docId));
                     count++;
                 }
             }
-            await batch.commit();
-            showToast(`${count}件更新しました`, "success");
+
+            if (count > 0) {
+                await batch.commit();
+                showToast(`${count}件の予約を${status?'登録':'解除'}しました`, "success");
+            } else {
+                showToast("更新対象の日付がありません", "error");
+            }
         };
 
-        // 管理画面
         window.openAdmin = () => {
             document.getElementById('admin-view').classList.remove('hidden');
             switchAdminTab('menus');
@@ -446,7 +475,6 @@
             renderAdminUsers();
         };
 
-        // --- CSV機能 ---
         window.exportUserCSV = async () => {
             const snap = await getDocs(usersCol);
             let csv = "ID,パスワード,氏名,部署名,管理者権限(1=管理者)\n";

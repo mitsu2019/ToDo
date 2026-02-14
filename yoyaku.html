@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>社食予約システム - 修正版</title>
+    <title>社食予約システム - 高機能版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -19,6 +19,7 @@
         
         .day-sat { color: #2563eb; }
         .day-sun { color: #dc2626; }
+        .card-reserved { border-color: #10b981; background-color: #f0fdf4; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -38,7 +39,7 @@
             <form id="login-form" class="space-y-5">
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">ログインID</label>
-                    <input type="text" id="login-id" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin" required>
+                    <input type="text" id="login-id" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin / user id" required>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード</label>
@@ -108,22 +109,28 @@
         
         <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
             <!-- Stats Tab -->
-            <div id="tab-content-stats" class="tab-content active max-w-3xl mx-auto space-y-6">
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-lg">予約数集計（有効ユーザーのみ）</h3>
-                        <div class="flex gap-2">
-                            <button onclick="renderStats()" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-xs font-bold"><i class="fas fa-sync-alt mr-1"></i>更新</button>
+            <div id="tab-content-stats" class="tab-content active max-w-4xl mx-auto space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg">日付別予約数</h3>
+                            <button onclick="renderStats()" class="bg-blue-50 text-blue-600 px-3 py-1 rounded text-[10px] font-bold">更新</button>
                         </div>
+                        <div id="stats-container" class="max-h-[500px] overflow-y-auto space-y-2"></div>
                     </div>
-                    <div id="stats-container" class="space-y-2"></div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg">ユーザー別状況</h3>
+                        </div>
+                        <div id="user-stats-container" class="max-h-[500px] overflow-y-auto space-y-2"></div>
+                    </div>
                 </div>
 
                 <div class="bg-red-50 p-6 rounded-2xl border border-red-100">
-                    <h3 class="font-bold text-red-700 mb-2 text-sm">データメンテナンス</h3>
-                    <p class="text-xs text-red-600 mb-4">不整合なデータが含まれる場合に、すべての予約情報を削除してリセットします。実行すると元に戻せません。</p>
+                    <h3 class="font-bold text-red-700 mb-2 text-sm">データメンテナンス（リセット機能）</h3>
+                    <p class="text-xs text-red-600 mb-4">アカウント数より食数が多いなどのデータ不整合が発生した場合に使用してください。すべての予約情報を削除し初期化します。</p>
                     <button onclick="resetAllOrders()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg shadow-red-200 transition">
-                        全予約データをリセット（初期化）する
+                        全予約データをリセットする
                     </button>
                 </div>
             </div>
@@ -133,10 +140,10 @@
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                     <h3 class="font-bold mb-4">新規ユーザー登録</h3>
                     <form id="user-reg-form" class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <input type="text" id="reg-id" placeholder="ID" class="border p-2 text-sm rounded-lg" required>
+                        <input type="text" id="reg-id" placeholder="ログインID" class="border p-2 text-sm rounded-lg" required>
                         <input type="text" id="reg-name" placeholder="氏名" class="border p-2 text-sm rounded-lg" required>
                         <input type="text" id="reg-dept" placeholder="部署" class="border p-2 text-sm rounded-lg">
-                        <button type="submit" class="bg-blue-600 text-white py-2 rounded-lg font-bold">追加</button>
+                        <button type="submit" class="bg-blue-600 text-white py-2 rounded-lg font-bold">ユーザー追加</button>
                     </form>
                 </div>
                 <div id="user-list-container" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -149,6 +156,13 @@
 
             <!-- Menus Tab -->
             <div id="tab-content-menus" class="tab-content max-w-5xl mx-auto">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-4 flex justify-between items-center">
+                    <h3 class="font-bold">献立管理 (${viewDate.getFullYear()}年${viewDate.getMonth()+1}月)</h3>
+                    <div class="flex gap-2">
+                        <button onclick="changeMonth(-1)" class="p-2 bg-gray-100 rounded-lg"><i class="fas fa-chevron-left"></i></button>
+                        <button onclick="changeMonth(1)" class="p-2 bg-gray-100 rounded-lg"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
                 <div id="admin-menu-list" class="space-y-2"></div>
             </div>
         </main>
@@ -209,8 +223,8 @@
                 if (uSnap.exists() && (uSnap.data().password === pass || (id === 'admin' && pass === 'admin'))) {
                     currentUser = uSnap.data();
                     startApp();
-                } else { showToast("認証失敗", "error"); }
-            } catch (err) { showToast("通信エラー", "error"); } finally { toggleLoader(false); }
+                } else { showToast("IDまたはパスワードが違います", "error"); }
+            } catch (err) { showToast("ログインエラー", "error"); } finally { toggleLoader(false); }
         };
 
         function startApp() {
@@ -259,14 +273,14 @@
                 const wIdx = cardDate.getDay();
                 
                 const card = document.createElement('div');
-                card.className = `bg-white p-4 rounded-xl border ${isReserved ? 'border-green-500 bg-green-50' : 'border-gray-200 shadow-sm'}`;
+                card.className = `bg-white p-4 rounded-xl border transition duration-200 ${isReserved ? 'card-reserved shadow-md shadow-green-100' : 'border-gray-200 shadow-sm'}`;
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
-                        <span class="font-bold ${wIdx===6?'day-sat':wIdx===0?'day-sun':''}">${d}日(${weekNames[wIdx]})</span>
+                        <span class="font-bold text-sm ${wIdx===6?'day-sat':wIdx===0?'day-sun':''}">${d}日(${weekNames[wIdx]})</span>
                         ${isReserved ? `<i class="fas fa-check-circle text-green-500"></i>` : ''}
                     </div>
-                    <div class="text-xs font-bold text-gray-700 h-8 mb-4">${menu.title || '---'}</div>
-                    <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2 rounded-lg text-xs font-bold transition ${isReserved ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-blue-600 text-white'}">
+                    <div class="text-xs font-bold text-gray-700 min-h-[2.5rem] mb-4">${menu.title || '<span class="text-gray-300">未設定</span>'}</div>
+                    <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2 rounded-lg text-xs font-bold transition ${isReserved ? 'bg-white text-red-500 border border-red-200 hover:bg-red-50' : 'bg-blue-600 text-white hover:bg-blue-700'}">
                         ${isReserved ? '予約取消' : '予約する'}
                     </button>
                 `;
@@ -277,8 +291,10 @@
         window.toggleOrder = async (dateKey, status) => {
             const docId = `${currentUser.id}_${dateKey}`;
             const ref = doc(db, ordersColPath, docId);
-            if (status) await setDoc(ref, { userId: currentUser.id, date: dateKey, userName: currentUser.name, timestamp: serverTimestamp() });
-            else await deleteDoc(ref);
+            try {
+                if (status) await setDoc(ref, { userId: currentUser.id, date: dateKey, userName: currentUser.name, timestamp: serverTimestamp() });
+                else await deleteDoc(ref);
+            } catch (err) { showToast("保存できませんでした", "error"); }
         };
 
         window.batchReserve = async (status) => {
@@ -291,7 +307,7 @@
                 else batch.delete(doc(db, ordersColPath, docId));
             }
             await batch.commit();
-            showToast("処理完了", "success");
+            showToast("一括処理が完了しました", "success");
         };
 
         // Admin functions
@@ -315,13 +331,14 @@
             snap.forEach(d => {
                 const u = d.data();
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="p-4">${u.id}</td><td class="p-4 font-bold">${u.name}</td><td class="p-4">${u.department||''}</td><td class="p-4"><button onclick="deleteUser('${u.id}')" class="text-red-500"><i class="fas fa-trash"></i></button></td>`;
+                tr.innerHTML = `<td class="p-4">${u.id}</td><td class="p-4 font-bold">${u.name}</td><td class="p-4">${u.department||''}</td><td class="p-4"><button onclick="deleteUser('${u.id}')" class="text-red-500 hover:text-red-700 transition"><i class="fas fa-trash"></i></button></td>`;
                 tbody.appendChild(tr);
             });
         }
 
         window.deleteUser = async (id) => {
-            if(id === 'admin') return;
+            if(id === 'admin') { showToast("管理者は削除できません", "error"); return; }
+            if(!confirm("このユーザーを削除しますか？")) return;
             await deleteDoc(doc(db, usersColPath, id));
             renderAdminUsers();
         };
@@ -334,6 +351,7 @@
             await setDoc(doc(db, usersColPath, id), { id, name, department: dept, password: id });
             e.target.reset();
             renderAdminUsers();
+            showToast("ユーザーを登録しました", "success");
         };
 
         function renderAdminMenus() {
@@ -344,21 +362,27 @@
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
                 const div = document.createElement('div');
-                div.className = "flex gap-4 items-center bg-white p-2 border rounded-lg";
-                div.innerHTML = `<div class="w-12 text-xs font-bold">${d}日</div><input type="text" id="m-${dateKey}" value="${menu.title||''}" class="flex-grow border p-1 text-sm rounded"><button onclick="saveMenu('${dateKey}')" class="bg-gray-800 text-white text-[10px] px-2 py-1 rounded">保存</button>`;
+                div.className = "flex gap-4 items-center bg-white p-3 border border-gray-100 rounded-xl shadow-sm";
+                div.innerHTML = `
+                    <div class="w-16 text-xs font-bold text-gray-500">${d}日(${weekNames[new Date(viewDate.getFullYear(), viewDate.getMonth(), d).getDay()]})</div>
+                    <input type="text" id="m-${dateKey}" value="${menu.title||''}" placeholder="献立を入力" class="flex-grow border border-gray-200 p-2 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="saveMenu('${dateKey}')" class="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition">保存</button>
+                `;
                 list.appendChild(div);
             }
         }
         window.saveMenu = async (date) => {
             const val = document.getElementById(`m-${date}`).value;
             await setDoc(doc(db, menusColPath, date), { title: val }, { merge: true });
-            showToast("保存しました", "success");
+            showToast("献立を更新しました", "success");
         };
 
-        // --- Stats & Reset Logic (Modified) ---
+        // --- Stats Logic (Fixed) ---
         window.renderStats = async () => {
             const container = document.getElementById('stats-container');
+            const uContainer = document.getElementById('user-stats-container');
             container.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">集計中...</div>';
+            uContainer.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">集計中...</div>';
             
             try {
                 const [uSnap, oSnap] = await Promise.all([
@@ -366,58 +390,65 @@
                     getDocs(collection(db, ordersColPath))
                 ]);
 
-                // 有効なユーザーのリストを作成（IDのみのセット）
                 const validUserIds = new Set();
-                uSnap.forEach(d => validUserIds.add(d.id));
+                const userNames = {};
+                uSnap.forEach(d => {
+                    validUserIds.add(d.id);
+                    userNames[d.id] = d.data().name;
+                });
 
-                const stats = {}; // key: date, value: Set(userIds)
-                
+                const dateStats = {}; 
+                const userTotalStats = {};
+
                 oSnap.forEach(doc => {
                     const data = doc.data();
-                    // userId が存在し、かつ有効なユーザーリストに含まれている場合のみカウント
                     if (data.date && data.userId && validUserIds.has(data.userId)) {
-                        if (!stats[data.date]) stats[data.date] = new Set();
-                        stats[data.date].add(data.userId);
+                        // 日付別
+                        if (!dateStats[data.date]) dateStats[data.date] = 0;
+                        dateStats[data.date]++;
+                        
+                        // ユーザー別
+                        if (!userTotalStats[data.userId]) userTotalStats[data.userId] = 0;
+                        userTotalStats[data.userId]++;
                     }
                 });
 
+                // 日付別表示
                 container.innerHTML = '';
-                const sortedDates = Object.keys(stats).sort((a,b) => b.localeCompare(a));
-                
-                if(sortedDates.length === 0) {
-                    container.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">予約データはありません</div>';
-                    return;
-                }
-
+                const sortedDates = Object.keys(dateStats).sort((a,b) => b.localeCompare(a));
+                if(sortedDates.length === 0) container.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">データなし</p>';
                 sortedDates.forEach(date => {
-                    const count = stats[date].size;
                     const div = document.createElement('div');
-                    div.className = "flex justify-between items-center p-3 border-b border-gray-100 bg-white rounded-lg mb-1";
-                    div.innerHTML = `
-                        <div class="flex flex-col">
-                            <span class="text-[10px] text-gray-400">${date}</span>
-                            <span class="text-sm font-bold text-gray-700">${menuData[date]?.title || '献立未設定'}</span>
-                        </div>
-                        <span class="text-blue-600 font-black">${count}食</span>
-                    `;
+                    div.className = "flex justify-between items-center p-3 border-b border-gray-50 bg-gray-50/30 rounded-lg mb-1";
+                    div.innerHTML = `<div><span class="text-[10px] text-gray-400 block">${date}</span><span class="text-sm font-bold text-gray-700">${menuData[date]?.title || '未設定'}</span></div><span class="text-blue-600 font-black text-lg">${dateStats[date]}食</span>`;
                     container.appendChild(div);
                 });
+
+                // ユーザー別表示
+                uContainer.innerHTML = '';
+                const sortedUsers = Object.keys(userTotalStats).sort((a,b) => userTotalStats[b] - userTotalStats[a]);
+                sortedUsers.forEach(uid => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center p-3 border-b border-gray-50 bg-gray-50/30 rounded-lg mb-1";
+                    div.innerHTML = `<span class="text-sm font-bold text-gray-700">${userNames[uid] || uid}</span><span class="text-gray-500 font-bold">${userTotalStats[uid]} 予約</span>`;
+                    uContainer.appendChild(div);
+                });
+
             } catch (err) {
-                container.innerHTML = '<div class="text-red-500 text-center py-4">読み込み失敗</div>';
+                container.innerHTML = '<div class="text-red-500 text-center py-4">取得失敗</div>';
             }
         };
 
-        // リセット機能: 既存の全予約ドキュメントを削除
+        // Reset Data
         window.resetAllOrders = async () => {
-            if (!confirm("【警告】すべての予約データを完全に消去します。\nよろしいですか？")) return;
+            if (!confirm("【最終確認】全ユーザーの予約データをすべて削除します。この操作は取り消せません。よろしいですか？")) return;
             
             toggleLoader(true);
             try {
                 const oSnap = await getDocs(collection(db, ordersColPath));
-                const batchSize = 400; // Firebase batch limit is 500
+                const batchSize = 400;
                 let count = 0;
                 let batch = writeBatch(db);
-                
                 const deletePromises = [];
                 
                 oSnap.forEach((doc) => {
@@ -429,15 +460,12 @@
                     }
                 });
                 
-                if (count % batchSize !== 0) {
-                    deletePromises.push(batch.commit());
-                }
-                
+                if (count % batchSize !== 0) deletePromises.push(batch.commit());
                 await Promise.all(deletePromises);
-                showToast(`合計 ${count} 件のデータをリセットしました。`, "success");
+                
+                showToast(`${count}件のデータをリセットしました。`, "success");
                 renderStats();
             } catch (err) {
-                console.error(err);
                 showToast("リセットに失敗しました", "error");
             } finally {
                 toggleLoader(false);
@@ -448,10 +476,13 @@
         function showToast(m, t) {
             const c = document.getElementById('toast-container');
             const el = document.createElement('div');
-            el.className = `p-4 rounded-xl text-white text-[11px] font-bold shadow-xl ${t==='success'?'bg-gray-900':'bg-red-600'}`;
+            el.className = `p-4 rounded-xl text-white text-xs font-bold shadow-2xl transition duration-300 transform translate-y-0 ${t==='success'?'bg-gray-900':'bg-red-600 animate-bounce'}`;
             el.innerText = m;
             c.appendChild(el);
-            setTimeout(() => el.remove(), 3000);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 3000);
         }
     </script>
 </body>

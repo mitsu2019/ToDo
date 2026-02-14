@@ -146,7 +146,7 @@
                         <form id="user-reg-form" class="space-y-3">
                             <input type="text" id="reg-id" placeholder="ID" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
                             <input type="text" id="reg-pass" placeholder="パスワード" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
-                            <input type="text" id="reg-name" placeholder="氏名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
+                            <input type="text" id="reg-name" placeholder="氏名" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
                             <input type="text" id="reg-dept" placeholder="部署名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
                             <label class="flex items-center gap-2"><input type="checkbox" id="reg-isadmin"> <span class="text-xs">管理者権限</span></label>
                             <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold">追加</button>
@@ -241,14 +241,17 @@
             onSnapshot(configDoc, (snap) => {
                 if(snap.exists()) {
                     systemConfig = snap.data();
-                    document.getElementById('deadline-days').value = systemConfig.deadlineDays;
-                    document.getElementById('deadline-time').value = systemConfig.deadlineTime;
+                    const dDays = document.getElementById('deadline-days');
+                    const dTime = document.getElementById('deadline-time');
+                    if(dDays) dDays.value = systemConfig.deadlineDays;
+                    if(dTime) dTime.value = systemConfig.deadlineTime;
                     renderCalendar();
                 }
             });
         }
         init();
 
+        // ログイン処理
         document.getElementById('login-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('login-id').value.trim();
@@ -266,6 +269,25 @@
                     startApp();
                 } else { showToast("認証に失敗しました", "error"); }
             } catch (err) { showToast("通信エラー", "error"); } finally { toggleLoader(false); }
+        };
+
+        // ユーザー追加処理 (修正ポイント)
+        document.getElementById('user-reg-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('reg-id').value.trim();
+            const password = document.getElementById('reg-pass').value.trim();
+            const name = document.getElementById('reg-name').value.trim();
+            const department = document.getElementById('reg-dept').value.trim();
+            const isAdmin = document.getElementById('reg-isadmin').checked;
+
+            try {
+                await setDoc(doc(usersCol, id), { id, password, name, department, isAdmin });
+                showToast("ユーザーを追加しました", "success");
+                e.target.reset(); // フォームをクリア
+                renderAdminUsers(); // 一覧を再描画
+            } catch (err) {
+                showToast("追加に失敗しました", "error");
+            }
         };
 
         function startApp() {
@@ -300,18 +322,13 @@
             document.getElementById('admin-month-display').innerText = txt;
         }
 
-        // 締切判定ロジック
         function isLocked(dateKey, menu) {
-            // 手動設定が優先
             if (menu.forceClosed === true) return true;
-            
             const targetDate = new Date(dateKey + "T00:00:00");
             const deadlineDate = new Date(targetDate);
             deadlineDate.setDate(deadlineDate.getDate() - parseInt(systemConfig.deadlineDays));
-            
             const [hours, mins] = systemConfig.deadlineTime.split(':');
             deadlineDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
-            
             return new Date() > deadlineDate;
         }
 
@@ -328,7 +345,6 @@
                 const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
                 const wIdx = cardDate.getDay();
                 const dayClass = wIdx === 6 ? 'day-sat' : (wIdx === 0 ? 'day-sun' : '');
-                
                 const locked = isLocked(dateKey, menu);
                 const isHoliday = menu.isHoliday || false;
 
@@ -410,7 +426,6 @@
                 const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
                 const wIdx = cardDate.getDay();
                 const dayClass = wIdx === 6 ? 'day-sat' : (wIdx === 0 ? 'day-sun' : '');
-
                 const div = document.createElement('div');
                 div.className = "flex flex-wrap gap-2 md:gap-4 bg-white p-3 rounded-xl border border-gray-100 items-center";
                 div.innerHTML = `
@@ -500,10 +515,10 @@
         };
 
         function downloadCSV(c, f) { const b = new Uint8Array([0xEF, 0xBB, 0xBF]); const blob = new Blob([b, c], { type: 'text/csv' }); const u = URL.createObjectURL(blob); const l = document.createElement("a"); l.href = u; l.download = f; l.click(); }
-
         function toggleLoader(s) { document.getElementById('login-loader').style.display = s ? 'block' : 'none'; document.getElementById('login-btn').disabled = s; }
         function showToast(m, t) {
             const c = document.getElementById('toast-container');
+            if(!c) return;
             const el = document.createElement('div');
             el.className = `p-4 rounded-xl shadow-2xl text-white text-xs font-bold transition-all duration-300 ${t==='success'?'bg-gray-900':'bg-red-600'}`;
             el.innerText = m;

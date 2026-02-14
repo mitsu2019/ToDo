@@ -148,7 +148,7 @@
                             <input type="text" id="reg-pass" placeholder="パスワード" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
                             <input type="text" id="reg-name" placeholder="氏名" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
                             <input type="text" id="reg-dept" placeholder="部署名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
-                            <label class="flex items-center gap-2"><input type="checkbox" id="reg-isadmin"> <span class="text-xs">管理者権限</span></label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="reg-isadmin"> <span class="text-xs">管理者権限</span></label>
                             <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold">追加</button>
                         </form>
                     </div>
@@ -271,7 +271,7 @@
             } catch (err) { showToast("通信エラー", "error"); } finally { toggleLoader(false); }
         };
 
-        // ユーザー追加処理 (修正ポイント)
+        // ユーザー追加処理
         document.getElementById('user-reg-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('reg-id').value.trim();
@@ -283,8 +283,8 @@
             try {
                 await setDoc(doc(usersCol, id), { id, password, name, department, isAdmin });
                 showToast("ユーザーを追加しました", "success");
-                e.target.reset(); // フォームをクリア
-                renderAdminUsers(); // 一覧を再描画
+                e.target.reset();
+                renderAdminUsers();
             } catch (err) {
                 showToast("追加に失敗しました", "error");
             }
@@ -508,14 +508,33 @@
 
         window.downloadDailyOrderCSV = async (date) => {
             const [uSnap, oSnap] = await Promise.all([getDocs(usersCol), getDocs(query(ordersCol, where("date", "==", date)))]);
-            const reserved = new Set(); oSnap.forEach(d => reserved.add(d.data().userId));
-            let csv = "ID,部署,氏名,予約状況\n";
-            uSnap.forEach(d => { const u = d.data(); if(u.id==='admin') return; csv += `${u.id},${u.department||''},${u.name||''},${reserved.has(u.id)?'予約あり':'--'}\n`; });
+            const reserved = new Set(); 
+            oSnap.forEach(d => reserved.add(d.data().userId));
+            
+            // ヘッダー。予約状況は「数量」として扱う
+            let csv = "ID,部署,氏名,数量\n";
+            uSnap.forEach(d => { 
+                const u = d.data(); 
+                if(u.id === 'admin') return; 
+                // 予約があれば 1、なければ空欄（または0）
+                const val = reserved.has(u.id) ? "1" : "0";
+                csv += `${u.id},${u.department||''},${u.name||''},${val}\n`; 
+            });
             downloadCSV(csv, `orders_${date}.csv`);
         };
 
-        function downloadCSV(c, f) { const b = new Uint8Array([0xEF, 0xBB, 0xBF]); const blob = new Blob([b, c], { type: 'text/csv' }); const u = URL.createObjectURL(blob); const l = document.createElement("a"); l.href = u; l.download = f; l.click(); }
+        function downloadCSV(c, f) { 
+            const b = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM for Excel
+            const blob = new Blob([b, c], { type: 'text/csv' }); 
+            const u = URL.createObjectURL(blob); 
+            const l = document.createElement("a"); 
+            l.href = u; 
+            l.download = f; 
+            l.click(); 
+        }
+
         function toggleLoader(s) { document.getElementById('login-loader').style.display = s ? 'block' : 'none'; document.getElementById('login-btn').disabled = s; }
+        
         function showToast(m, t) {
             const c = document.getElementById('toast-container');
             if(!c) return;

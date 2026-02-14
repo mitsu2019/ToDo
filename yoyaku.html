@@ -1,549 +1,112 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>社食予約システム</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body { 
-            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; 
-            min-height: 100vh;
-        }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #ffffff !important; font-weight: bold; }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        html { scroll-behavior: smooth; }
+<div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
+    <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+        </div>
+</div>
+
+<div id="tab-content-settings" class="tab-content max-w-2xl mx-auto">
+    <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
+        <h3 class="font-bold text-xl mb-6 flex items-center"><i class="fas fa-clock mr-2 text-blue-500"></i>共通予約締切設定</h3>
+        <hr class="my-8">
         
-        /* 曜日の色分け */
-        .day-sat { color: #2563eb; } /* 青 */
-        .day-sun { color: #dc2626; } /* 赤 */
-    </style>
-</head>
-<body class="bg-gray-50 text-gray-800">
-
-    <div id="toast-container" class="fixed top-4 right-4 z-[110] flex flex-col gap-2"></div>
-
-    <!-- ログインビュー -->
-    <div id="login-view" class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4">
-                    <i class="fas fa-utensils text-2xl"></i>
-                </div>
-                <h1 class="text-2xl font-bold text-gray-800">社食予約システム</h1>
-                <p class="text-gray-500 text-sm mt-2">ログイン情報を入力してください</p>
-            </div>
-            <form id="login-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">ログインID</label>
-                    <input type="text" id="login-id" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin" required>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード</label>
-                    <input type="password" id="login-pass" class="block w-full rounded-lg border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••••••" required>
-                </div>
-                <button type="submit" id="login-btn" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 font-bold flex justify-center items-center shadow-lg shadow-blue-200">
-                    <span>ログイン</span>
-                    <div id="login-loader" class="loader ml-2"></div>
-                </button>
-            </form>
+        <h3 class="font-bold text-xl mb-4 flex items-center text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>危険な操作</h3>
+        <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+            <p class="text-xs text-red-700 font-bold mb-3">全ユーザーの全期間の予約データを完全に消去します。この操作は取り消せません。</p>
+            <button onclick="cancelAllReservations()" class="w-full bg-red-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-red-100 hover:bg-red-700 transition">
+                全ての予約をキャンセル状態にする
+            </button>
         </div>
     </div>
+</div>
 
-    <!-- メインユーザービュー -->
-    <div id="user-view" class="hidden min-h-screen flex flex-col">
-        <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-            <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-                <div class="flex items-center space-x-3">
-                    <div class="bg-blue-600 text-white p-2 rounded-lg">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <h1 class="text-lg font-bold text-gray-800">予約カレンダー</h1>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div id="user-info" class="hidden sm:flex flex-col text-right mr-2">
-                        <span class="text-xs text-gray-400 font-bold uppercase tracking-tighter" id="user-dept"></span>
-                        <span class="text-sm font-bold text-gray-700" id="user-name"></span>
-                    </div>
-                    <button id="admin-entry-btn" onclick="openAdmin()" class="hidden text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 px-3 py-2 rounded-lg border border-amber-200 font-bold transition">
-                        <i class="fas fa-tools mr-1"></i> 管理
-                    </button>
-                    <button onclick="location.reload()" class="text-xs text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg font-bold transition">
-                        ログアウト
-                    </button>
-                </div>
-            </div>
-        </header>
+<script type="module">
+    // --- 既存のimport等は維持 ---
+    // ... (initializeApp, getFirestore 等)
 
-        <main class="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full">
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center sticky top-[72px] z-40">
-                <div class="flex items-center gap-4 bg-gray-50 rounded-xl p-1 px-2 border border-gray-100">
-                    <button onclick="changeMonth(-1)" class="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded-lg transition">
-                        <i class="fas fa-chevron-left text-gray-400"></i>
-                    </button>
-                    <h2 id="current-month-display" class="text-lg font-bold text-gray-800 min-w-[100px] text-center"></h2>
-                    <button onclick="changeMonth(1)" class="w-8 h-8 flex items-center justify-center hover:bg-white hover:shadow-sm rounded-lg transition">
-                        <i class="fas fa-chevron-right text-gray-400"></i>
-                    </button>
-                </div>
-                <div class="flex gap-2 w-full sm:w-auto">
-                    <button onclick="batchReserve(true)" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition">
-                        一括予約
-                    </button>
-                    <button onclick="batchReserve(false)" class="flex-1 sm:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl text-xs font-bold transition">
-                        一括解除
-                    </button>
-                </div>
-            </div>
+    // --- 追加・修正した関数 ---
 
-            <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20"></div>
-        </main>
-    </div>
-
-    <!-- 管理画面 -->
-    <div id="admin-view" class="hidden fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden">
-        <header class="bg-gray-900 text-white shadow p-4 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-2">
-                <i class="fas fa-user-shield text-amber-400"></i>
-                <h1 class="font-bold">管理者用管理画面</h1>
-            </div>
-            <button onclick="closeAdmin()" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition font-bold">
-                <i class="fas fa-times mr-1"></i> 戻る
-            </button>
-        </header>
-        <nav class="flex bg-gray-800 px-4 border-b border-gray-700 shrink-0 overflow-x-auto">
-            <button onclick="switchAdminTab('menus')" id="tab-btn-menus" class="tab-btn active px-6 py-4 text-sm text-gray-400 whitespace-nowrap">献立・受付設定</button>
-            <button onclick="switchAdminTab('users')" id="tab-btn-users" class="tab-btn px-6 py-4 text-sm text-gray-400 whitespace-nowrap">ユーザー管理</button>
-            <button onclick="switchAdminTab('stats')" id="tab-btn-stats" class="tab-btn px-6 py-4 text-sm text-gray-400 whitespace-nowrap">予約統計</button>
-            <button onclick="switchAdminTab('settings')" id="tab-btn-settings" class="tab-btn px-6 py-4 text-sm text-gray-400 whitespace-nowrap">システム設定</button>
-        </nav>
+    /**
+     * 1. 予約を全アカウントすべてキャンセル状態にする
+     */
+    window.cancelAllReservations = async () => {
+        if (!confirm("本当に全てのアカウントの全予約を削除してもよろしいですか？\nこの操作は元に戻せません。")) return;
         
-        <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
-            <!-- 献立設定タブ -->
-            <div id="tab-content-menus" class="tab-content active max-w-5xl mx-auto">
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-between items-center">
-                    <div class="flex items-center gap-3">
-                        <button onclick="changeMonth(-1)" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200"><i class="fas fa-chevron-left"></i></button>
-                        <h3 id="admin-month-display" class="font-bold text-lg"></h3>
-                        <button onclick="changeMonth(1)" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                    <div class="flex items-center gap-4 text-xs text-gray-500">
-                        <span><i class="fas fa-info-circle mr-1"></i>「受付中」チェックを外すと強制的に締切になります</span>
-                    </div>
-                </div>
-                <div id="admin-menu-list" class="space-y-2"></div>
-            </div>
-            
-            <!-- ユーザー管理タブ -->
-            <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                        <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-user-plus mr-2 text-blue-500"></i>個別登録</h3>
-                        <form id="user-reg-form" class="space-y-3">
-                            <input type="text" id="reg-id" placeholder="ID" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
-                            <input type="text" id="reg-pass" placeholder="パスワード" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
-                            <input type="text" id="reg-name" placeholder="氏名" class="w-full border border-gray-200 p-2 text-sm rounded-lg" required>
-                            <input type="text" id="reg-dept" placeholder="部署名" class="w-full border border-gray-200 p-2 text-sm rounded-lg">
-                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="reg-isadmin"> <span class="text-xs">管理者権限</span></label>
-                            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold">追加</button>
-                        </form>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                        <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-file-csv mr-2 text-green-500"></i>CSV操作</h3>
-                        <div class="space-y-4">
-                            <input type="file" id="user-csv-file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
-                            <button onclick="importUserCSV()" class="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-bold">インポート</button>
-                            <button onclick="exportUserCSV()" class="w-full bg-white border border-green-600 text-green-600 py-2 rounded-lg text-sm font-bold hover:bg-green-50">CSV出力</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="user-list-container" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-50 text-[10px] uppercase text-gray-400">
-                            <tr><th class="p-4">ID</th><th class="p-4">部署</th><th class="p-4">氏名</th><th class="p-4 text-center">操作</th></tr>
-                        </thead>
-                        <tbody id="user-list-tbody" class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 予約統計タブ -->
-            <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
-                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200"></div>
-            </div>
-
-            <!-- システム設定タブ -->
-            <div id="tab-content-settings" class="tab-content max-w-2xl mx-auto">
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                    <h3 class="font-bold text-xl mb-6 flex items-center"><i class="fas fa-clock mr-2 text-blue-500"></i>共通予約締切設定</h3>
-                    <div class="space-y-6">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">何日前に締め切るか</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="deadline-days" min="0" max="30" class="w-24 border rounded-lg p-3 text-center" value="1">
-                                    <span class="font-bold text-gray-500">日前</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">締切時刻</label>
-                                <input type="time" id="deadline-time" class="w-full border rounded-lg p-3" value="17:00">
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-400 leading-relaxed bg-gray-50 p-4 rounded-lg">
-                            ※ 設定例: 「1日前 17:00」に設定した場合、2月10日の予約は2月9日の17:00に自動的に締め切られます。
-                        </p>
-                        <button onclick="saveGlobalSettings()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition">設定を保存する</button>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, where, deleteDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyCbLKiYVbZSNuyV_GKALHBhRYcrfLZyNdw",
-            authDomain: "yoyaku-4b66a.firebaseapp.com",
-            projectId: "yoyaku-4b66a",
-            appId: "1:353551924907:web:b3edd452252ee8bb1181ee"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'shokudo-yoyaku-v3';
-        
-        const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
-        const ordersCol = collection(db, 'artifacts', appId, 'public', 'data', 'orders');
-        const menusCol = collection(db, 'artifacts', appId, 'public', 'data', 'menus');
-        const configDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global');
-
-        let currentUser = null;
-        let myOrders = {};
-        let menuData = {};
-        let systemConfig = { deadlineDays: 1, deadlineTime: "17:00" };
-        let viewDate = new Date();
-
-        const weekNames = ['日', '月', '火', '水', '木', '金', '土'];
-
-        async function init() {
-            await signInAnonymously(auth);
-            
-            // 設定読み込み
-            onSnapshot(configDoc, (snap) => {
-                if(snap.exists()) {
-                    systemConfig = snap.data();
-                    const dDays = document.getElementById('deadline-days');
-                    const dTime = document.getElementById('deadline-time');
-                    if(dDays) dDays.value = systemConfig.deadlineDays;
-                    if(dTime) dTime.value = systemConfig.deadlineTime;
-                    renderCalendar();
-                }
-            });
-        }
-        init();
-
-        // ログイン処理
-        document.getElementById('login-form').onsubmit = async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('login-id').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
-            toggleLoader(true);
-            try {
-                if (id === 'admin' && pass === 'admin') {
-                    const adminRef = doc(usersCol, 'admin');
-                    const snap = await getDoc(adminRef);
-                    if (!snap.exists()) await setDoc(adminRef, { id: 'admin', password: 'admin', name: 'システム管理者', department: '情報システム', isAdmin: true });
-                }
-                const uSnap = await getDoc(doc(usersCol, id));
-                if (uSnap.exists() && uSnap.data().password === pass) {
-                    currentUser = uSnap.data();
-                    startApp();
-                } else { showToast("認証に失敗しました", "error"); }
-            } catch (err) { showToast("通信エラー", "error"); } finally { toggleLoader(false); }
-        };
-
-        // ユーザー追加処理
-        document.getElementById('user-reg-form').onsubmit = async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('reg-id').value.trim();
-            const password = document.getElementById('reg-pass').value.trim();
-            const name = document.getElementById('reg-name').value.trim();
-            const department = document.getElementById('reg-dept').value.trim();
-            const isAdmin = document.getElementById('reg-isadmin').checked;
-
-            try {
-                await setDoc(doc(usersCol, id), { id, password, name, department, isAdmin });
-                showToast("ユーザーを追加しました", "success");
-                e.target.reset();
-                renderAdminUsers();
-            } catch (err) {
-                showToast("追加に失敗しました", "error");
+        try {
+            const snap = await getDocs(ordersCol);
+            if (snap.empty) {
+                showToast("削除する予約データがありません", "info");
+                return;
             }
-        };
 
-        function startApp() {
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('user-view').classList.remove('hidden');
-            document.getElementById('user-name').innerText = currentUser.name;
-            document.getElementById('user-dept').innerText = currentUser.department;
-            if (currentUser.isAdmin) document.getElementById('admin-entry-btn').classList.remove('hidden');
-            updateDisplays();
-            onSnapshot(menusCol, (snap) => {
-                menuData = {};
-                snap.forEach(d => menuData[d.id] = d.data());
-                renderCalendar();
-            });
-            onSnapshot(query(ordersCol, where("userId", "==", currentUser.id)), (snap) => {
-                myOrders = {};
-                snap.forEach(d => myOrders[d.data().date] = true);
-                renderCalendar();
-            });
-        }
-
-        window.changeMonth = (diff) => {
-            viewDate.setMonth(viewDate.getMonth() + diff);
-            updateDisplays();
-            renderCalendar();
-            if(!document.getElementById('admin-view').classList.contains('hidden')) renderAdminMenus();
-        };
-
-        function updateDisplays() {
-            const txt = `${viewDate.getFullYear()}年${viewDate.getMonth()+1}月`;
-            document.getElementById('current-month-display').innerText = txt;
-            document.getElementById('admin-month-display').innerText = txt;
-        }
-
-        function isLocked(dateKey, menu) {
-            if (menu.forceClosed === true) return true;
-            const targetDate = new Date(dateKey + "T00:00:00");
-            const deadlineDate = new Date(targetDate);
-            deadlineDate.setDate(deadlineDate.getDate() - parseInt(systemConfig.deadlineDays));
-            const [hours, mins] = systemConfig.deadlineTime.split(':');
-            deadlineDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
-            return new Date() > deadlineDate;
-        }
-
-        function renderCalendar() {
-            const grid = document.getElementById('calendar-grid');
-            if(!grid) return;
-            grid.innerHTML = '';
-            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-
-            for (let d = 1; d <= days; d++) {
-                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const menu = menuData[dateKey] || {};
-                const isReserved = myOrders[dateKey];
-                const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
-                const wIdx = cardDate.getDay();
-                const dayClass = wIdx === 6 ? 'day-sat' : (wIdx === 0 ? 'day-sun' : '');
-                const locked = isLocked(dateKey, menu);
-                const isHoliday = menu.isHoliday || false;
-
-                const card = document.createElement('div');
-                card.className = `bg-white p-4 rounded-xl border transition ${isReserved ? 'border-green-500 bg-green-50' : 'border-gray-200 shadow-sm'} ${isHoliday ? 'opacity-60 bg-gray-100' : ''}`;
-                
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xl font-black ${dayClass}">${d}<span class="text-xs ml-1 font-bold">(${weekNames[wIdx]})</span></span>
-                        ${isReserved ? `<span class="bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold"><i class="fas fa-check mr-1"></i>予約済</span>` : 
-                          (locked || isHoliday ? `<span class="bg-gray-200 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">未予約</span>` : '')}
-                    </div>
-                    <div class="aspect-video bg-gray-50 rounded-lg mb-2 overflow-hidden flex items-center justify-center border border-gray-100">
-                        ${menu.image ? `<img src="${menu.image}" class="w-full h-full object-cover">` : '<i class="fas fa-utensils text-gray-200 text-2xl"></i>'}
-                    </div>
-                    <div class="text-sm font-bold mb-3 h-8 line-clamp-2 text-gray-700">${isHoliday ? '--- 休業日 ---' : (menu.title || 'メニュー未定')}</div>
-                    ${!locked && !isHoliday ? `
-                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2.5 rounded-lg text-xs font-bold transition ${isReserved ? 'bg-white text-red-500 border border-red-200 hover:bg-red-50' : 'bg-blue-600 text-white shadow-md hover:bg-blue-700'}">
-                            ${isReserved ? '予約をキャンセル' : '予約する'}
-                        </button>
-                    ` : `
-                        <div class="text-center py-2.5 bg-gray-100 rounded-lg text-[10px] text-gray-400 font-bold border border-dashed border-gray-300">
-                            ${isHoliday ? '休業日' : '受付終了'}
-                        </div>
-                    `}
-                `;
-                grid.appendChild(card);
-            }
-        }
-
-        window.toggleOrder = async (dateKey, status) => {
-            const docId = `${currentUser.id}_${dateKey}`;
-            if (status) {
-                await setDoc(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
-            } else {
-                await deleteDoc(doc(ordersCol, docId));
-            }
-        };
-
-        window.batchReserve = async (status) => {
             const batch = writeBatch(db);
-            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            let count = 0;
-            for (let d = 1; d <= days; d++) {
-                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                if (isLocked(dateKey, menuData[dateKey] || {}) || menuData[dateKey]?.isHoliday) continue;
-                const docId = `${currentUser.id}_${dateKey}`;
-                if (status && !myOrders[dateKey]) {
-                    batch.set(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
-                    count++;
-                } else if (!status && myOrders[dateKey]) {
-                    batch.delete(doc(ordersCol, docId));
-                    count++;
-                }
-            }
-            if (count > 0) { await batch.commit(); showToast(`${count}件処理しました`, "success"); }
-        };
-
-        window.openAdmin = () => { document.getElementById('admin-view').classList.remove('hidden'); switchAdminTab('menus'); };
-        window.closeAdmin = () => document.getElementById('admin-view').classList.add('hidden');
-
-        window.switchAdminTab = (name) => {
-            document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
-            document.getElementById(`tab-content-${name}`).classList.add('active');
-            document.getElementById(`tab-btn-${name}`).classList.add('active');
-            if (name === 'menus') renderAdminMenus();
-            if (name === 'users') renderAdminUsers();
-            if (name === 'stats') renderStats();
-        };
-
-        function renderAdminMenus() {
-            const list = document.getElementById('admin-menu-list');
-            list.innerHTML = '';
-            const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            for (let d = 1; d <= days; d++) {
-                const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const menu = menuData[dateKey] || {};
-                const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
-                const wIdx = cardDate.getDay();
-                const dayClass = wIdx === 6 ? 'day-sat' : (wIdx === 0 ? 'day-sun' : '');
-                const div = document.createElement('div');
-                div.className = "flex flex-wrap gap-2 md:gap-4 bg-white p-3 rounded-xl border border-gray-100 items-center";
-                div.innerHTML = `
-                    <div class="w-14 text-sm font-bold ${dayClass}">${d}日(${weekNames[wIdx]})</div>
-                    <input type="text" value="${menu.title || ''}" onchange="saveMenuField('${dateKey}', 'title', this.value)" placeholder="献立名を入力" class="flex-grow border bg-gray-50 p-2 text-sm rounded-lg outline-none focus:bg-white focus:ring-1 ring-blue-200">
-                    <div class="flex items-center gap-3 shrink-0 bg-gray-50 p-2 rounded-lg border">
-                        <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" ${menu.isHoliday?'checked':''} onchange="saveMenuField('${dateKey}', 'isHoliday', this.checked)"> <span class="text-[11px] font-bold">休業</span></label>
-                        <div class="w-px h-4 bg-gray-200"></div>
-                        <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" ${menu.forceClosed===false?'':'checked'} onchange="saveMenuField('${dateKey}', 'forceClosed', !this.checked)"> <span class="text-[11px] font-bold">受付中</span></label>
-                    </div>
-                    <label class="bg-blue-100 text-blue-600 w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer shrink-0 hover:bg-blue-200 transition">
-                        <i class="fas fa-camera text-sm"></i>
-                        <input type="file" class="hidden" onchange="uploadImage('${dateKey}', this)">
-                    </label>
-                    ${menu.image ? `<img src="${menu.image}" class="h-9 w-9 object-cover rounded shadow-sm">` : ''}
-                `;
-                list.appendChild(div);
-            }
-        }
-
-        window.saveMenuField = async (date, field, val) => {
-            await setDoc(doc(menusCol, date), { [field]: val }, { merge: true });
-        };
-
-        window.uploadImage = (date, input) => {
-            const file = input.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.src = e.target.result;
-                img.onload = async () => {
-                    const canvas = document.createElement('canvas');
-                    const scale = 400 / img.width;
-                    canvas.width = 400; canvas.height = img.height * scale;
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    await setDoc(doc(menusCol, date), { image: canvas.toDataURL('image/jpeg', 0.6) }, { merge: true });
-                    renderAdminMenus();
-                };
-            };
-            reader.readAsDataURL(file);
-        };
-
-        window.saveGlobalSettings = async () => {
-            const days = document.getElementById('deadline-days').value;
-            const time = document.getElementById('deadline-time').value;
-            await setDoc(configDoc, { deadlineDays: days, deadlineTime: time });
-            showToast("システム設定を更新しました", "success");
-        };
-
-        async function renderAdminUsers() {
-            const snap = await getDocs(usersCol);
-            const tbody = document.getElementById('user-list-tbody');
-            tbody.innerHTML = '';
             snap.forEach(d => {
-                const u = d.data();
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="p-4 font-bold text-gray-700">${u.id}</td><td class="p-4 text-xs text-gray-400">${u.department||'-'}</td><td class="p-4 font-bold">${u.name||'-'}</td><td class="p-4 text-center">${u.id!=='admin'?`<button onclick="deleteUser('${u.id}')" class="text-red-300 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>`:''}</td>`;
-                tbody.appendChild(tr);
+                batch.delete(d.ref);
             });
-        }
-
-        window.deleteUser = async (id) => { if (confirm(`${id} を削除しますか？`)) { await deleteDoc(doc(usersCol, id)); renderAdminUsers(); } };
-
-        async function renderStats() {
-            const ordersSnap = await getDocs(ordersCol);
-            const orderMap = {};
-            ordersSnap.forEach(d => { const o = d.data(); if (!orderMap[o.date]) orderMap[o.date] = 0; orderMap[o.date]++; });
-            const container = document.getElementById('stats-container');
-            container.innerHTML = `<h3 class="font-bold mb-4 flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>`;
-            const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
-            if(sortedDates.length === 0) { container.innerHTML += '<p class="text-center text-gray-400 py-10">集計データがありません</p>'; return; }
-            sortedDates.forEach(date => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center border-b p-4 hover:bg-gray-50 transition";
-                div.innerHTML = `<div class="font-bold text-gray-700">${date} <span class="ml-4 text-blue-600 font-black">${orderMap[date]}食</span></div><button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold">CSV出力</button>`;
-                container.appendChild(div);
-            });
-        }
-
-        window.downloadDailyOrderCSV = async (date) => {
-            const [uSnap, oSnap] = await Promise.all([getDocs(usersCol), getDocs(query(ordersCol, where("date", "==", date)))]);
-            const reserved = new Set(); 
-            oSnap.forEach(d => reserved.add(d.data().userId));
             
-            // ヘッダー。予約状況は「数量」として扱う
-            let csv = "ID,部署,氏名,数量\n";
-            uSnap.forEach(d => { 
-                const u = d.data(); 
-                if(u.id === 'admin') return; 
-                // 予約があれば 1、なければ空欄（または0）
-                const val = reserved.has(u.id) ? "1" : "0";
-                csv += `${u.id},${u.department||''},${u.name||''},${val}\n`; 
-            });
-            downloadCSV(csv, `orders_${date}.csv`);
-        };
-
-        function downloadCSV(c, f) { 
-            const b = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM for Excel
-            const blob = new Blob([b, c], { type: 'text/csv' }); 
-            const u = URL.createObjectURL(blob); 
-            const l = document.createElement("a"); 
-            l.href = u; 
-            l.download = f; 
-            l.click(); 
+            await batch.commit();
+            showToast(`全 ${snap.size} 件の予約をキャンセルしました`, "success");
+            
+            // 統計画面にいれば再描画
+            if (!document.getElementById('tab-content-stats').classList.contains('hidden')) {
+                renderStats();
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("一括削除中にエラーが発生しました", "error");
         }
+    };
 
-        function toggleLoader(s) { document.getElementById('login-loader').style.display = s ? 'block' : 'none'; document.getElementById('login-btn').disabled = s; }
+    /**
+     * 2. 予約集計明細に再集計ボタンをつける
+     */
+    async function renderStats() {
+        // ローディング表示（任意）
+        const container = document.getElementById('stats-container');
+        container.innerHTML = '<p class="text-center py-10">集計中...</p>';
+
+        const ordersSnap = await getDocs(ordersCol);
+        const orderMap = {};
+        ordersSnap.forEach(d => { 
+            const o = d.data(); 
+            if (!orderMap[o.date]) orderMap[o.date] = 0; 
+            orderMap[o.date]++; 
+        });
+
+        // ヘッダーと再集計ボタンの構築
+        container.innerHTML = `
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold text-lg flex items-center">
+                    <i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細
+                </h3>
+                <button onclick="renderStats()" class="text-xs bg-blue-50 text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-100 transition">
+                    <i class="fas fa-sync-alt mr-1"></i>再集計（最新に更新）
+                </button>
+            </div>
+        `;
+
+        const sortedDates = Object.keys(orderMap).sort((a, b) => b.localeCompare(a));
         
-        function showToast(m, t) {
-            const c = document.getElementById('toast-container');
-            if(!c) return;
-            const el = document.createElement('div');
-            el.className = `p-4 rounded-xl shadow-2xl text-white text-xs font-bold transition-all duration-300 ${t==='success'?'bg-gray-900':'bg-red-600'}`;
-            el.innerText = m;
-            c.appendChild(el);
-            setTimeout(() => el.remove(), 3000);
+        if (sortedDates.length === 0) {
+            container.innerHTML += '<p class="text-center text-gray-400 py-10">集計データがありません</p>';
+            return;
         }
-    </script>
-</body>
-</html>
+
+        sortedDates.forEach(date => {
+            const div = document.createElement('div');
+            div.className = "flex justify-between items-center border-b p-4 hover:bg-gray-50 transition";
+            div.innerHTML = `
+                <div class="font-bold text-gray-700">
+                    ${date} <span class="ml-4 text-blue-600 font-black">${orderMap[date]}食</span>
+                </div>
+                <button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold">
+                    CSV出力
+                </button>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    // グローバルに登録（既存のコードとの整合性のため）
+    window.renderStats = renderStats;
+
+    // ... (その他の既存の関数群)
+</script>

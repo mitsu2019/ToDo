@@ -18,16 +18,15 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         html { scroll-behavior: smooth; }
         
-        /* 曜日の色分け */
-        .day-sat { color: #2563eb; } /* 青 */
-        .day-sun { color: #dc2626; } /* 赤 */
+        .day-sat { color: #2563eb; }
+        .day-sun { color: #dc2626; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
     <div id="toast-container" class="fixed top-4 right-4 z-[110] flex flex-col gap-2"></div>
 
-    <!-- ログインビュー -->
+    <!-- Login View -->
     <div id="login-view" class="min-h-screen flex items-center justify-center p-4">
         <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
             <div class="text-center mb-8">
@@ -54,7 +53,7 @@
         </div>
     </div>
 
-    <!-- メインユーザービュー -->
+    <!-- User View -->
     <div id="user-view" class="hidden min-h-screen flex flex-col">
         <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
@@ -99,12 +98,11 @@
                     </button>
                 </div>
             </div>
-
             <div id="calendar-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20"></div>
         </main>
     </div>
 
-    <!-- 管理画面 -->
+    <!-- Admin View -->
     <div id="admin-view" class="hidden fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden">
         <header class="bg-gray-900 text-white shadow p-4 flex justify-between items-center shrink-0">
             <div class="flex items-center gap-2">
@@ -123,7 +121,7 @@
         </nav>
         
         <main class="flex-grow overflow-y-auto p-4 md:p-8 bg-gray-50">
-            <!-- 献立設定タブ -->
+            <!-- Menus Tab -->
             <div id="tab-content-menus" class="tab-content active max-w-5xl mx-auto">
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-between items-center">
                     <div class="flex items-center gap-3">
@@ -131,14 +129,11 @@
                         <h3 id="admin-month-display" class="font-bold text-lg"></h3>
                         <button onclick="changeMonth(1)" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200"><i class="fas fa-chevron-right"></i></button>
                     </div>
-                    <div class="flex items-center gap-4 text-xs text-gray-500">
-                        <span><i class="fas fa-info-circle mr-1"></i>「受付中」チェックを外すと強制的に締切になります</span>
-                    </div>
                 </div>
                 <div id="admin-menu-list" class="space-y-2"></div>
             </div>
             
-            <!-- ユーザー管理タブ -->
+            <!-- Users Tab -->
             <div id="tab-content-users" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
@@ -155,8 +150,6 @@
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                         <h3 class="font-bold text-lg mb-4 flex items-center"><i class="fas fa-file-csv mr-2 text-green-500"></i>CSV操作</h3>
                         <div class="space-y-4">
-                            <input type="file" id="user-csv-file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
-                            <button onclick="importUserCSV()" class="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-bold">インポート</button>
                             <button onclick="exportUserCSV()" class="w-full bg-white border border-green-600 text-green-600 py-2 rounded-lg text-sm font-bold hover:bg-green-50">CSV出力</button>
                         </div>
                     </div>
@@ -171,12 +164,14 @@
                 </div>
             </div>
 
-            <!-- 予約統計タブ -->
+            <!-- Stats Tab -->
             <div id="tab-content-stats" class="tab-content max-w-3xl mx-auto">
-                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200"></div>
+                <div id="stats-container" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <!-- Loaded dynamically -->
+                </div>
             </div>
 
-            <!-- システム設定タブ -->
+            <!-- Settings Tab -->
             <div id="tab-content-settings" class="tab-content max-w-2xl mx-auto">
                 <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
                     <h3 class="font-bold text-xl mb-6 flex items-center"><i class="fas fa-clock mr-2 text-blue-500"></i>共通予約締切設定</h3>
@@ -184,20 +179,14 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">何日前に締め切るか</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="deadline-days" min="0" max="30" class="w-24 border rounded-lg p-3 text-center" value="1">
-                                    <span class="font-bold text-gray-500">日前</span>
-                                </div>
+                                <input type="number" id="deadline-days" min="0" max="30" class="w-full border rounded-lg p-3" value="1">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">締切時刻</label>
                                 <input type="time" id="deadline-time" class="w-full border rounded-lg p-3" value="17:00">
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400 leading-relaxed bg-gray-50 p-4 rounded-lg">
-                            ※ 設定例: 「1日前 17:00」に設定した場合、2月10日の予約は2月9日の17:00に自動的に締め切られます。
-                        </p>
-                        <button onclick="saveGlobalSettings()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition">設定を保存する</button>
+                        <button onclick="saveGlobalSettings()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">保存する</button>
                     </div>
                 </div>
             </div>
@@ -231,27 +220,19 @@
         let menuData = {};
         let systemConfig = { deadlineDays: 1, deadlineTime: "17:00" };
         let viewDate = new Date();
-
         const weekNames = ['日', '月', '火', '水', '木', '金', '土'];
 
         async function init() {
             await signInAnonymously(auth);
-            
-            // 設定読み込み
             onSnapshot(configDoc, (snap) => {
                 if(snap.exists()) {
                     systemConfig = snap.data();
-                    const dDays = document.getElementById('deadline-days');
-                    const dTime = document.getElementById('deadline-time');
-                    if(dDays) dDays.value = systemConfig.deadlineDays;
-                    if(dTime) dTime.value = systemConfig.deadlineTime;
                     renderCalendar();
                 }
             });
         }
         init();
 
-        // ログイン処理
         document.getElementById('login-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('login-id').value.trim();
@@ -261,33 +242,29 @@
                 if (id === 'admin' && pass === 'admin') {
                     const adminRef = doc(usersCol, 'admin');
                     const snap = await getDoc(adminRef);
-                    if (!snap.exists()) await setDoc(adminRef, { id: 'admin', password: 'admin', name: 'システム管理者', department: '情報システム', isAdmin: true });
+                    if (!snap.exists()) await setDoc(adminRef, { id: 'admin', password: 'admin', name: '管理者', department: '情報', isAdmin: true });
                 }
                 const uSnap = await getDoc(doc(usersCol, id));
                 if (uSnap.exists() && uSnap.data().password === pass) {
                     currentUser = uSnap.data();
                     startApp();
-                } else { showToast("認証に失敗しました", "error"); }
-            } catch (err) { showToast("通信エラー", "error"); } finally { toggleLoader(false); }
+                } else { showToast("認証失敗", "error"); }
+            } catch (err) { showToast("エラー", "error"); } finally { toggleLoader(false); }
         };
 
-        // ユーザー追加処理
         document.getElementById('user-reg-form').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('reg-id').value.trim();
-            const password = document.getElementById('reg-pass').value.trim();
-            const name = document.getElementById('reg-name').value.trim();
-            const department = document.getElementById('reg-dept').value.trim();
-            const isAdmin = document.getElementById('reg-isadmin').checked;
-
-            try {
-                await setDoc(doc(usersCol, id), { id, password, name, department, isAdmin });
-                showToast("ユーザーを追加しました", "success");
-                e.target.reset();
-                renderAdminUsers();
-            } catch (err) {
-                showToast("追加に失敗しました", "error");
-            }
+            await setDoc(doc(usersCol, id), { 
+                id, 
+                password: document.getElementById('reg-pass').value.trim(), 
+                name: document.getElementById('reg-name').value.trim(), 
+                department: document.getElementById('reg-dept').value.trim(), 
+                isAdmin: document.getElementById('reg-isadmin').checked 
+            });
+            showToast("追加しました", "success");
+            e.target.reset();
+            renderAdminUsers();
         };
 
         function startApp() {
@@ -337,7 +314,6 @@
             if(!grid) return;
             grid.innerHTML = '';
             const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-
             for (let d = 1; d <= days; d++) {
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
@@ -350,26 +326,17 @@
 
                 const card = document.createElement('div');
                 card.className = `bg-white p-4 rounded-xl border transition ${isReserved ? 'border-green-500 bg-green-50' : 'border-gray-200 shadow-sm'} ${isHoliday ? 'opacity-60 bg-gray-100' : ''}`;
-                
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xl font-black ${dayClass}">${d}<span class="text-xs ml-1 font-bold">(${weekNames[wIdx]})</span></span>
-                        ${isReserved ? `<span class="bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold"><i class="fas fa-check mr-1"></i>予約済</span>` : 
-                          (locked || isHoliday ? `<span class="bg-gray-200 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">未予約</span>` : '')}
+                        ${isReserved ? `<span class="bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">予約済</span>` : ''}
                     </div>
-                    <div class="aspect-video bg-gray-50 rounded-lg mb-2 overflow-hidden flex items-center justify-center border border-gray-100">
-                        ${menu.image ? `<img src="${menu.image}" class="w-full h-full object-cover">` : '<i class="fas fa-utensils text-gray-200 text-2xl"></i>'}
-                    </div>
-                    <div class="text-sm font-bold mb-3 h-8 line-clamp-2 text-gray-700">${isHoliday ? '--- 休業日 ---' : (menu.title || 'メニュー未定')}</div>
+                    <div class="text-sm font-bold mb-3 h-8 text-gray-700">${isHoliday ? '休業日' : (menu.title || '未定')}</div>
                     ${!locked && !isHoliday ? `
-                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2.5 rounded-lg text-xs font-bold transition ${isReserved ? 'bg-white text-red-500 border border-red-200 hover:bg-red-50' : 'bg-blue-600 text-white shadow-md hover:bg-blue-700'}">
-                            ${isReserved ? '予約をキャンセル' : '予約する'}
+                        <button onclick="toggleOrder('${dateKey}', ${!isReserved})" class="w-full py-2.5 rounded-lg text-xs font-bold transition ${isReserved ? 'bg-white text-red-500 border border-red-200' : 'bg-blue-600 text-white shadow-md'}">
+                            ${isReserved ? '取消' : '予約'}
                         </button>
-                    ` : `
-                        <div class="text-center py-2.5 bg-gray-100 rounded-lg text-[10px] text-gray-400 font-bold border border-dashed border-gray-300">
-                            ${isHoliday ? '休業日' : '受付終了'}
-                        </div>
-                    `}
+                    ` : `<div class="text-center py-2.5 bg-gray-100 rounded-lg text-[10px] text-gray-400 font-bold">締切</div>`}
                 `;
                 grid.appendChild(card);
             }
@@ -377,30 +344,21 @@
 
         window.toggleOrder = async (dateKey, status) => {
             const docId = `${currentUser.id}_${dateKey}`;
-            if (status) {
-                await setDoc(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
-            } else {
-                await deleteDoc(doc(ordersCol, docId));
-            }
+            if (status) await setDoc(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
+            else await deleteDoc(doc(ordersCol, docId));
         };
 
         window.batchReserve = async (status) => {
             const batch = writeBatch(db);
             const days = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            let count = 0;
             for (let d = 1; d <= days; d++) {
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 if (isLocked(dateKey, menuData[dateKey] || {}) || menuData[dateKey]?.isHoliday) continue;
                 const docId = `${currentUser.id}_${dateKey}`;
-                if (status && !myOrders[dateKey]) {
-                    batch.set(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
-                    count++;
-                } else if (!status && myOrders[dateKey]) {
-                    batch.delete(doc(ordersCol, docId));
-                    count++;
-                }
+                if (status && !myOrders[dateKey]) batch.set(doc(ordersCol, docId), { userId: currentUser.id, userName: currentUser.name, department: currentUser.department, date: dateKey, timestamp: serverTimestamp() });
+                else if (!status && myOrders[dateKey]) batch.delete(doc(ordersCol, docId));
             }
-            if (count > 0) { await batch.commit(); showToast(`${count}件処理しました`, "success"); }
+            await batch.commit();
         };
 
         window.openAdmin = () => { document.getElementById('admin-view').classList.remove('hidden'); switchAdminTab('menus'); };
@@ -413,7 +371,7 @@
             document.getElementById(`tab-btn-${name}`).classList.add('active');
             if (name === 'menus') renderAdminMenus();
             if (name === 'users') renderAdminUsers();
-            if (name === 'stats') renderStats();
+            if (name === 'stats') renderStats(); // 修正ポイント：タブ切り替え時に再集計
         };
 
         function renderAdminMenus() {
@@ -423,58 +381,19 @@
             for (let d = 1; d <= days; d++) {
                 const dateKey = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const menu = menuData[dateKey] || {};
-                const cardDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
-                const wIdx = cardDate.getDay();
-                const dayClass = wIdx === 6 ? 'day-sat' : (wIdx === 0 ? 'day-sun' : '');
                 const div = document.createElement('div');
-                div.className = "flex flex-wrap gap-2 md:gap-4 bg-white p-3 rounded-xl border border-gray-100 items-center";
+                div.className = "flex gap-2 bg-white p-3 rounded-xl border border-gray-100 items-center";
                 div.innerHTML = `
-                    <div class="w-14 text-sm font-bold ${dayClass}">${d}日(${weekNames[wIdx]})</div>
-                    <input type="text" value="${menu.title || ''}" onchange="saveMenuField('${dateKey}', 'title', this.value)" placeholder="献立名を入力" class="flex-grow border bg-gray-50 p-2 text-sm rounded-lg outline-none focus:bg-white focus:ring-1 ring-blue-200">
-                    <div class="flex items-center gap-3 shrink-0 bg-gray-50 p-2 rounded-lg border">
-                        <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" ${menu.isHoliday?'checked':''} onchange="saveMenuField('${dateKey}', 'isHoliday', this.checked)"> <span class="text-[11px] font-bold">休業</span></label>
-                        <div class="w-px h-4 bg-gray-200"></div>
-                        <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" ${menu.forceClosed===false?'':'checked'} onchange="saveMenuField('${dateKey}', 'forceClosed', !this.checked)"> <span class="text-[11px] font-bold">受付中</span></label>
-                    </div>
-                    <label class="bg-blue-100 text-blue-600 w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer shrink-0 hover:bg-blue-200 transition">
-                        <i class="fas fa-camera text-sm"></i>
-                        <input type="file" class="hidden" onchange="uploadImage('${dateKey}', this)">
-                    </label>
-                    ${menu.image ? `<img src="${menu.image}" class="h-9 w-9 object-cover rounded shadow-sm">` : ''}
+                    <div class="w-14 text-sm font-bold">${d}日</div>
+                    <input type="text" value="${menu.title || ''}" onchange="saveMenuField('${dateKey}', 'title', this.value)" class="flex-grow border bg-gray-50 p-2 text-sm rounded-lg outline-none">
+                    <label class="flex items-center gap-1"><input type="checkbox" ${menu.isHoliday?'checked':''} onchange="saveMenuField('${dateKey}', 'isHoliday', this.checked)"> <span class="text-xs">休業</span></label>
+                    <label class="flex items-center gap-1"><input type="checkbox" ${menu.forceClosed===false?'':'checked'} onchange="saveMenuField('${dateKey}', 'forceClosed', !this.checked)"> <span class="text-xs">受付</span></label>
                 `;
                 list.appendChild(div);
             }
         }
 
-        window.saveMenuField = async (date, field, val) => {
-            await setDoc(doc(menusCol, date), { [field]: val }, { merge: true });
-        };
-
-        window.uploadImage = (date, input) => {
-            const file = input.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.src = e.target.result;
-                img.onload = async () => {
-                    const canvas = document.createElement('canvas');
-                    const scale = 400 / img.width;
-                    canvas.width = 400; canvas.height = img.height * scale;
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    await setDoc(doc(menusCol, date), { image: canvas.toDataURL('image/jpeg', 0.6) }, { merge: true });
-                    renderAdminMenus();
-                };
-            };
-            reader.readAsDataURL(file);
-        };
-
-        window.saveGlobalSettings = async () => {
-            const days = document.getElementById('deadline-days').value;
-            const time = document.getElementById('deadline-time').value;
-            await setDoc(configDoc, { deadlineDays: days, deadlineTime: time });
-            showToast("システム設定を更新しました", "success");
-        };
+        window.saveMenuField = async (date, field, val) => { await setDoc(doc(menusCol, date), { [field]: val }, { merge: true }); };
 
         async function renderAdminUsers() {
             const snap = await getDocs(usersCol);
@@ -483,66 +402,76 @@
             snap.forEach(d => {
                 const u = d.data();
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="p-4 font-bold text-gray-700">${u.id}</td><td class="p-4 text-xs text-gray-400">${u.department||'-'}</td><td class="p-4 font-bold">${u.name||'-'}</td><td class="p-4 text-center">${u.id!=='admin'?`<button onclick="deleteUser('${u.id}')" class="text-red-300 hover:text-red-600"><i class="fas fa-trash-alt"></i></button>`:''}</td>`;
+                tr.innerHTML = `<td class="p-4">${u.id}</td><td class="p-4">${u.department||''}</td><td class="p-4">${u.name||''}</td><td class="p-4 text-center">${u.id!=='admin'?`<button onclick="deleteUser('${u.id}')" class="text-red-300">削除</button>`:''}</td>`;
                 tbody.appendChild(tr);
             });
         }
 
-        window.deleteUser = async (id) => { if (confirm(`${id} を削除しますか？`)) { await deleteDoc(doc(usersCol, id)); renderAdminUsers(); } };
-
         async function renderStats() {
-            const ordersSnap = await getDocs(ordersCol);
-            const orderMap = {};
-            ordersSnap.forEach(d => { const o = d.data(); if (!orderMap[o.date]) orderMap[o.date] = 0; orderMap[o.date]++; });
             const container = document.getElementById('stats-container');
-            container.innerHTML = `<h3 class="font-bold mb-4 flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>`;
-            const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
-            if(sortedDates.length === 0) { container.innerHTML += '<p class="text-center text-gray-400 py-10">集計データがありません</p>'; return; }
-            sortedDates.forEach(date => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center border-b p-4 hover:bg-gray-50 transition";
-                div.innerHTML = `<div class="font-bold text-gray-700">${date} <span class="ml-4 text-blue-600 font-black">${orderMap[date]}食</span></div><button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold">CSV出力</button>`;
-                container.appendChild(div);
-            });
+            container.innerHTML = '<div class="flex items-center justify-center p-10"><div class="loader" style="display:block"></div><span class="ml-2 text-gray-400">集計中...</span></div>';
+            
+            try {
+                // 全件取得して再計算
+                const ordersSnap = await getDocs(ordersCol);
+                const orderMap = {};
+                ordersSnap.forEach(d => {
+                    const o = d.data();
+                    if (!orderMap[o.date]) orderMap[o.date] = 0;
+                    orderMap[o.date]++;
+                });
+
+                container.innerHTML = `<h3 class="font-bold mb-4 flex items-center"><i class="fas fa-chart-pie mr-2 text-green-500"></i>予約集計明細</h3>`;
+                const sortedDates = Object.keys(orderMap).sort((a,b) => b.localeCompare(a));
+                
+                if(sortedDates.length === 0) {
+                    container.innerHTML += '<p class="text-center text-gray-400 py-10">集計データがありません</p>';
+                    return;
+                }
+
+                sortedDates.forEach(date => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center border-b p-4 hover:bg-gray-50 transition";
+                    div.innerHTML = `
+                        <div class="font-bold text-gray-700">${date} <span class="ml-4 text-blue-600 font-black">${orderMap[date]}食</span></div>
+                        <button onclick="downloadDailyOrderCSV('${date}')" class="text-[10px] bg-gray-800 text-white px-3 py-2 rounded-lg font-bold">CSV出力</button>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-500">データの取得に失敗しました</p>';
+            }
         }
 
         window.downloadDailyOrderCSV = async (date) => {
             const [uSnap, oSnap] = await Promise.all([getDocs(usersCol), getDocs(query(ordersCol, where("date", "==", date)))]);
             const reserved = new Set(); 
             oSnap.forEach(d => reserved.add(d.data().userId));
-            
-            // ヘッダー。予約状況は「数量」として扱う
             let csv = "ID,部署,氏名,数量\n";
             uSnap.forEach(d => { 
                 const u = d.data(); 
                 if(u.id === 'admin') return; 
-                // 予約があれば 1、なければ空欄（または0）
-                const val = reserved.has(u.id) ? "1" : "0";
-                csv += `${u.id},${u.department||''},${u.name||''},${val}\n`; 
+                csv += `${u.id},${u.department||''},${u.name||''},${reserved.has(u.id) ? "1" : "0"}\n`; 
             });
             downloadCSV(csv, `orders_${date}.csv`);
         };
 
         function downloadCSV(c, f) { 
-            const b = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM for Excel
+            const b = new Uint8Array([0xEF, 0xBB, 0xBF]);
             const blob = new Blob([b, c], { type: 'text/csv' }); 
             const u = URL.createObjectURL(blob); 
             const l = document.createElement("a"); 
-            l.href = u; 
-            l.download = f; 
-            l.click(); 
+            l.href = u; l.download = f; l.click(); 
         }
 
-        function toggleLoader(s) { document.getElementById('login-loader').style.display = s ? 'block' : 'none'; document.getElementById('login-btn').disabled = s; }
-        
+        function toggleLoader(s) { document.getElementById('login-loader').style.display = s ? 'block' : 'none'; }
         function showToast(m, t) {
             const c = document.getElementById('toast-container');
-            if(!c) return;
             const el = document.createElement('div');
-            el.className = `p-4 rounded-xl shadow-2xl text-white text-xs font-bold transition-all duration-300 ${t==='success'?'bg-gray-900':'bg-red-600'}`;
+            el.className = `p-4 rounded-xl text-white text-xs font-bold ${t==='success'?'bg-gray-900':'bg-red-600'}`;
             el.innerText = m;
             c.appendChild(el);
-            setTimeout(() => el.remove(), 3000);
+            setTimeout(() => el.remove(), 2000);
         }
     </script>
 </body>

@@ -6,10 +6,10 @@
     <title>ファミリースケジュール</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e5e7eb; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e5e7eb; width: 100%; }
         .calendar-day { min-height: 100px; background-color: white; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
-        .bg-dinner-yes { background-color: #dcfce7; border-left: 3px solid #22c55e; }
-        .bg-dinner-no { background-color: #fee2e2; border-left: 3px solid #ef4444; }
+        .bg-dinner-yes { background-color: #dcfce7 !important; border-left: 3px solid #22c55e; }
+        .bg-dinner-no { background-color: #fee2e2 !important; border-left: 3px solid #ef4444; }
         .bg-has-plan { border-right: 3px solid #3b82f6; }
         .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: bold; }
         #lock-screen { position: fixed; inset: 0; background: white; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -39,9 +39,9 @@
 
         <section id="view-calendar">
             <div class="flex items-center justify-between mb-4 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                <button id="prev-month" class="p-2 border rounded-full">◀</button>
-                <h2 id="month-display" class="font-bold"></h2>
-                <button id="next-month" class="p-2 border rounded-full">▶</button>
+                <button id="prev-month" class="p-2 border rounded-full w-10 h-10 flex items-center justify-center hover:bg-slate-50">◀</button>
+                <h2 id="month-display" class="font-bold text-lg"></h2>
+                <button id="next-month" class="p-2 border rounded-full w-10 h-10 flex items-center justify-center hover:bg-slate-50">▶</button>
             </div>
             <div class="calendar-grid rounded-xl overflow-hidden border border-slate-200 shadow-md">
                 <div class="bg-slate-100 p-1 text-center text-[10px] font-bold text-red-400">Sun</div>
@@ -63,12 +63,12 @@
     <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
             <h3 id="modal-date-title" class="text-lg font-extrabold mb-4 text-center border-b pb-2"></h3>
-            <p class="text-xs font-bold text-slate-400 mb-2">🍚 晩ご飯</p>
+            <p class="text-xs font-bold text-slate-400 mb-2 uppercase">🍚 晩ご飯</p>
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button data-group="dinner" data-status="dinner-yes" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">いる</button>
                 <button data-group="dinner" data-status="dinner-no" class="modal-btn py-3 bg-slate-100 rounded-xl font-bold">不要</button>
             </div>
-            <p class="text-xs font-bold text-slate-400 mb-2">📅 予定</p>
+            <p class="text-xs font-bold text-slate-400 mb-2 uppercase">📅 予定</p>
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button data-group="isTrip" class="modal-toggle-btn py-3 bg-slate-100 rounded-xl font-bold">出張</button>
                 <button data-group="isPlan" class="modal-toggle-btn py-3 bg-slate-100 rounded-xl font-bold">予定</button>
@@ -83,10 +83,11 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        const firebaseConfig = {
+        // Environment variables fallbacks
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyA4gVP3A9Ls3z0gKUFA0GmJu_pDgTYwg3s",
             authDomain: "family-acca5.firebaseapp.com",
             projectId: "family-acca5",
@@ -98,7 +99,8 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const COLLECTION_NAME = "schedules_v3";
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'family-app-v3';
+        const COLLECTION_PATH = ['artifacts', appId, 'public', 'data', 'schedules_v3'];
         const APP_PASSWORD = "family"; 
 
         let currentDate = new Date();
@@ -107,6 +109,7 @@
         let selectedDateKey = null;
         let editState = { dinner: null, isTrip: false, isPlan: false };
 
+        // Password logic
         document.getElementById('unlock-btn').onclick = () => {
             const val = document.getElementById('pass-input').value;
             if (val === APP_PASSWORD) {
@@ -135,22 +138,34 @@
             // カレンダー描画
             const calContainer = document.getElementById('calendar-days');
             calContainer.innerHTML = '';
-            for (let i = 0; i < firstDay; i++) calContainer.appendChild(document.createElement('div'));
+            
+            // 空白セル
+            for (let i = 0; i < firstDay; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day bg-slate-50/50 border-b border-r';
+                calContainer.appendChild(emptyCell);
+            }
 
+            // 日付セル
             for (let d = 1; d <= daysInMonth; d++) {
                 const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const data = scheduleData[dateKey] || {};
                 const dayEl = document.createElement('div');
-                dayEl.className = `calendar-day border-b border-r cursor-pointer ${data.dinner === 'dinner-yes' ? 'bg-dinner-yes' : data.dinner === 'dinner-no' ? 'bg-dinner-no' : ''} ${ (data.isTrip || data.isPlan) ? 'bg-has-plan' : ''}`;
+                const isSun = new Date(year, month, d).getDay() === 0;
+                const isSat = new Date(year, month, d).getDay() === 6;
+
+                dayEl.className = `calendar-day border-b border-r cursor-pointer hover:bg-slate-50 transition-colors ${data.dinner === 'dinner-yes' ? 'bg-dinner-yes' : data.dinner === 'dinner-no' ? 'bg-dinner-no' : ''} ${ (data.isTrip || data.isPlan) ? 'bg-has-plan' : ''}`;
+                
                 let labels = '';
                 if(data.dinner === 'dinner-yes') labels += '🍚';
                 if(data.dinner === 'dinner-no') labels += '✖';
                 if(data.isTrip) labels += '✈';
                 if(data.isPlan) labels += '📅';
+                
                 dayEl.innerHTML = `
-                    <div class="text-[9px] font-bold text-slate-400">${d}</div>
-                    <div class="text-center text-xs">${labels}</div>
-                    <div class="text-[8px] text-slate-500 truncate">${data.comment || ''}</div>
+                    <div class="text-[9px] font-bold ${isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-slate-400'}">${d}</div>
+                    <div class="text-center text-xs flex-grow flex items-center justify-center">${labels}</div>
+                    <div class="text-[8px] text-slate-500 truncate h-3">${data.comment || ''}</div>
                 `;
                 dayEl.onclick = () => window.openModal(dateKey);
                 calContainer.appendChild(dayEl);
@@ -161,7 +176,8 @@
             list.innerHTML = '';
             for (let d = 1; d <= daysInMonth; d++) {
                 const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dayOfWeek = weekdays[new Date(year, month, d).getDay()];
+                const dateObj = new Date(year, month, d);
+                const dayOfWeek = weekdays[dateObj.getDay()];
                 const data = scheduleData[dateKey] || {};
                 const row = document.createElement('div');
                 row.className = 'p-3 bg-white rounded-xl border shadow-sm flex flex-col gap-2';
@@ -173,8 +189,8 @@
                     <div class="grid grid-cols-4 gap-1">
                         <button onclick="window.quickSave('${dateKey}', {dinner: '${data.dinner === 'dinner-yes' ? '' : 'dinner-yes'}'})" class="py-2 text-[10px] rounded-lg border ${data.dinner==='dinner-yes'?'bg-green-500 text-white font-bold':'bg-slate-50 text-slate-400'}">いる</button>
                         <button onclick="window.quickSave('${dateKey}', {dinner: '${data.dinner === 'dinner-no' ? '' : 'dinner-no'}'})" class="py-2 text-[10px] rounded-lg border ${data.dinner==='dinner-no'?'bg-red-500 text-white font-bold':'bg-slate-50 text-slate-400'}">不要</button>
-                        <button onclick="window.quickSave('${dateKey}', {isTrip: ${!data.isTrip}})" class="py-2 text-[10px] rounded-lg border ${data.isTrip?'bg-yellow-400 text-white font-bold':'bg-slate-50 text-slate-400'}">出張${data.isTrip?'●':''}</button>
-                        <button onclick="window.quickSave('${dateKey}', {isPlan: ${!data.isPlan}})" class="py-2 text-[10px] rounded-lg border ${data.isPlan?'bg-blue-500 text-white font-bold':'bg-slate-50 text-slate-400'}">予定${data.isPlan?'●':''}</button>
+                        <button onclick="window.quickSave('${dateKey}', {isTrip: ${!data.isTrip}})" class="py-2 text-[10px] rounded-lg border ${data.isTrip?'bg-yellow-400 text-white font-bold':'bg-slate-50 text-slate-400'}">出張</button>
+                        <button onclick="window.quickSave('${dateKey}', {isPlan: ${!data.isPlan}})" class="py-2 text-[10px] rounded-lg border ${data.isPlan?'bg-blue-500 text-white font-bold':'bg-slate-50 text-slate-400'}">予定</button>
                     </div>
                     <div class="${hasPlan ? '' : 'hidden'} mt-1">
                         <input type="text" placeholder="詳細コメントを入力" 
@@ -191,7 +207,7 @@
         window.quickSave = async (dateKey, updates) => {
             const oldData = scheduleData[dateKey] || { dinner: null, isTrip: false, isPlan: false, comment: '' };
             const newData = { ...oldData, ...updates, updatedAt: serverTimestamp() };
-            await setDoc(doc(db, COLLECTION_NAME, dateKey), newData);
+            await setDoc(doc(db, ...COLLECTION_PATH, dateKey), newData);
         };
 
         window.openModal = (dateKey) => {
@@ -223,7 +239,7 @@
         
         document.getElementById('save-btn').onclick = async () => {
             const comment = document.getElementById('modal-comment').value;
-            await setDoc(doc(db, COLLECTION_NAME, selectedDateKey), { ...editState, comment: comment.trim(), updatedAt: serverTimestamp() });
+            await setDoc(doc(db, ...COLLECTION_PATH, selectedDateKey), { ...editState, comment: comment.trim(), updatedAt: serverTimestamp() });
             document.getElementById('edit-modal').classList.add('hidden');
         };
 
@@ -248,16 +264,27 @@
             document.getElementById('btn-view-calendar').classList.remove('tab-active');
         };
 
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
         onAuthStateChanged(auth, (u) => {
             user = u;
             if (user) {
-                onSnapshot(collection(db, COLLECTION_NAME), (snap) => {
+                onSnapshot(collection(db, ...COLLECTION_PATH), (snap) => {
                     scheduleData = {};
                     snap.forEach(d => scheduleData[d.id] = d.data());
                     renderAll();
-                });
-            } else { signInAnonymously(auth); }
+                }, (err) => console.error("Firestore error:", err));
+            } else { 
+                initAuth(); 
+            }
         });
+
         renderAll();
     </script>
 </body>

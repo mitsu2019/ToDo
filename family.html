@@ -100,7 +100,9 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'family-app-v3';
-        const COLLECTION_PATH = ['artifacts', appId, 'public', 'data', 'schedules_v3'];
+        
+        // データが消えて見えた原因の可能性：パスのバージョンを以前の「v2」に戻して確認します
+        const COLLECTION_PATH = ['artifacts', appId, 'public', 'data', 'schedules_v2'];
         const APP_PASSWORD = "family"; 
 
         let currentDate = new Date();
@@ -135,7 +137,6 @@
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const firstDay = new Date(year, month, 1).getDay();
             
-            // カレンダー描画
             const calContainer = document.getElementById('calendar-days');
             calContainer.innerHTML = '';
             
@@ -171,7 +172,7 @@
                 calContainer.appendChild(dayEl);
             }
 
-            // まとめて入力リスト描画
+            // まとめて入力リスト
             const list = document.getElementById('batch-input-list');
             list.innerHTML = '';
             for (let d = 1; d <= daysInMonth; d++) {
@@ -229,7 +230,9 @@
             const toggleBtns = { isTrip: 'bg-yellow-400 text-white', isPlan: 'bg-blue-500 text-white' };
             Object.keys(toggleBtns).forEach(key => {
                 const btn = document.querySelector(`[data-group="${key}"]`);
-                btn.className = `modal-toggle-btn py-3 rounded-xl font-bold transition-all ${editState[key] ? toggleBtns[key] : 'bg-slate-100 text-slate-400'}`;
+                if (btn) {
+                    btn.className = `modal-toggle-btn py-3 rounded-xl font-bold transition-all ${editState[key] ? toggleBtns[key] : 'bg-slate-100 text-slate-400'}`;
+                }
             });
             document.getElementById('modal-comment-container').classList.toggle('hidden', !(editState.isTrip || editState.isPlan));
         };

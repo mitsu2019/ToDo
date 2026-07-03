@@ -1,1269 +1,1337 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>旭日中授章お祝い会 受付管理システム</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome (Icons) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- QRCode.js (QRコード作成用) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- html5-qrcode (QRコード読み取りカメラ用) -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  onSnapshot,
+  deleteDoc
+} from 'firebase/firestore';
+import { 
+  QrCode, 
+  CheckCircle, 
+  Users, 
+  CreditCard, 
+  UserCheck, 
+  Mail, 
+  Calendar, 
+  MapPin, 
+  Clock, 
+  Lock, 
+  FileText, 
+  Plus, 
+  Trash2, 
+  Search, 
+  Camera, 
+  Sparkles,
+  RefreshCw,
+  LogOut,
+  ChevronRight,
+  UserPlus
+} from 'lucide-react';
+
+// Firebaseの設定
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'order-of-rising-sun-rsvp';
+
+// カラーパレット定義（伝統的な格式あるグループ分け色）
+const GROUP_COLORS = [
+  { id: 'gold', name: '金（松）', hex: '#D4AF37', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-400' },
+  { id: 'crimson', name: '紅（桜）', hex: '#DC2626', bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-400' },
+  { id: 'indigo', name: '藍（葵）', hex: '#4F46E5', bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-400' },
+  { id: 'forest', name: '翠（竹）', hex: '#16A34A', bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-400' },
+  { id: 'purple', name: '紫（藤）', hex: '#9333EA', bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-400' },
+  { id: 'none', name: '未設定', hex: '#6B7280', bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' }
+];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [currentTab, setCurrentTab] = useState('rsvp'); // 'rsvp' | 'ticket' | 'admin'
+  const [rsvps, setRsvps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // フォーム用ステータス
+  const [repName, setRepName] = useState('');
+  const [repEmail, setRepEmail] = useState('');
+  const [repPhone, setRepPhone] = useState('');
+  const [repNotes, setRepNotes] = useState('');
+  const [companions, setCompanions] = useState([]); // 同伴者の配列 { id, name }
+  const [rsvpSuccess, setRsvpSuccess] = useState(null); // 登録成功後の情報
+  
+  // マイチケット検索用
+  const [searchEmail, setSearchEmail] = useState('');
+  const [myTickets, setMyTickets] = useState([]);
+  const [ticketSearchError, setTicketSearchError] = useState('');
+
+  // 管理者モード
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingNotes, setEditingNotes] = useState({}); // { id: notes }
+  const [activeScanner, setActiveScanner] = useState(false);
+  const [scannerFeedback, setScannerFeedback] = useState({ type: '', message: '' });
+
+  // html5-qrcode スキャナー用
+  const [scannerLoaded, setScannerLoaded] = useState(false);
+  const qrScannerRef = useRef(null);
+  const html5QrCodeInstance = useRef(null);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+      setUser(usr);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // HTML5-QRCodeライブラリをCDNからロード
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+    script.async = true;
+    script.onload = () => setScannerLoaded(true);
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    setLoading(true);
+    // パス: /artifacts/{appId}/public/data/rsvps
+    const rsvpsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rsvps');
     
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Sans+Serif&display=swap');
-        .font-serif-jp {
-            font-family: 'Noto Serif JP', serif;
-        }
-        /* 高級感のあるゴールド＆プレミアムグラデーション */
-        .bg-gold-gradient {
-            background: linear-gradient(135deg, #b89742 0%, #dfc475 50%, #b89742 100%);
-        }
-        .text-gold {
-            color: #b89742;
-        }
-        .border-gold {
-            borderColor: #b89742;
-        }
+    const unsubscribe = onSnapshot(rsvpsRef, (snapshot) => {
+      const data = [];
+      snapshot.forEach((doc) => {
+        data.push({ id: doc.id, ...doc.data() });
+      });
+      // 作成日時順にソート
+      data.sort((a, b) => b.createdAt - a.createdAt);
+      setRsvps(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Firestore read error:", error);
+      setLoading(false);
+    });
 
-        /* 印刷用プレビュースタイル */
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            #guest-status-result, #guest-status-result * {
-                visibility: visible;
-            }
-            #guest-status-result {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                border: none !important;
-                box-shadow: none !important;
-                background: white !important;
-                color: black !important;
-                padding: 0 !important;
-            }
-            .no-print {
-                display: none !important;
-            }
-            @page {
-                size: A4 portrait;
-                margin: 20mm;
-            }
-        }
-    </style>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen font-sans flex flex-col">
+    return () => unsubscribe();
+  }, [user]);
 
-    <!-- ヘッダー -->
-    <header class="bg-slate-900 text-white shadow-md border-b-4 border-[#b89742] no-print">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center text-slate-900 font-bold text-xl shadow">
-                    祝
-                </div>
-                <div>
-                    <h1 class="text-lg md:text-xl font-bold tracking-wider font-serif-jp text-[#dfc475]">旭日中授章 受章お祝い会</h1>
-                    <p class="text-xs text-slate-400">出欠登録 ＆ 当日受付スマートシステム</p>
-                </div>
-            </div>
-            
-            <!-- 役割切り替えタブ -->
-            <div class="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full md:w-auto">
-                <button id="btn-tab-guest" onclick="switchView('guest')" class="flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-gold-gradient text-slate-950 shadow">
-                    <i class="fa-solid fa-user-pen"></i> ゲスト用（出欠登録）
-                </button>
-                <button id="btn-tab-admin" onclick="switchView('admin')" class="flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white">
-                    <i class="fa-solid fa-user-shield"></i> 主催者用（管理画面）
-                </button>
-            </div>
-        </div>
-    </header>
+  // 同伴者を追加する処理
+  const handleAddCompanion = () => {
+    setCompanions([...companions, { id: crypto.randomUUID(), name: '' }]);
+  };
 
-    <!-- メインコンテンツ -->
-    <main class="flex-grow max-w-6xl w-full mx-auto p-4">
+  // 同伴者を削除する処理
+  const handleRemoveCompanion = (id) => {
+    setCompanions(companions.filter(c => c.id !== id));
+  };
 
-        <!-- ============================================== -->
-        <!-- 1. ゲスト用ビュー (出欠登録 / ステータス確認) -->
-        <!-- ============================================== -->
-        <div id="view-guest" class="space-y-6">
-            <!-- 招待状ヘッダービジュアル -->
-            <div class="bg-slate-900 text-white rounded-2xl p-6 md:p-10 text-center relative overflow-hidden shadow-xl border border-[#b89742]/30 no-print">
-                <div class="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#dfc475_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                <div class="max-w-2xl mx-auto space-y-4">
-                    <span class="inline-block text-xs uppercase tracking-widest text-[#dfc475] border border-[#dfc475]/50 px-3 py-1 rounded-full font-semibold">Invitation</span>
-                    <h2 class="text-2xl md:text-4xl font-serif-jp tracking-widest text-[#dfc475] leading-relaxed">旭日中授章 受章お祝い会<br><span class="text-lg md:text-2xl">出欠ご回答ページ</span></h2>
-                    <div class="h-[1px] bg-gradient-to-r from-transparent via-[#dfc475] to-transparent my-4"></div>
-                    <p class="text-sm text-slate-300 leading-relaxed font-serif-jp">
-                        拝啓　時下ますますご清栄のこととお慶び申し上げます。<br>
-                        このたびの旭日中授章受章を記念いたしまして、ささやかながらお祝いの会を催す運びとなりました。<br>
-                        ご多忙の折、誠に恐縮ではございますが、万障お繰り合わせの上、ご来臨賜りますようお願い申し上げます。
-                    </p>
-                    <div class="pt-4 text-xs md:text-sm text-slate-400 space-y-1 bg-slate-950/50 p-3 rounded-lg border border-slate-800">
-                        <p><i class="fa-regular fa-calendar-days text-[#dfc475] mr-1"></i> <strong>日時：</strong> 2026年11月23日（祝） 17:00開宴 (16:30受付開始)</p>
-                        <p><i class="fa-solid fa-location-dot text-[#dfc475] mr-1"></i> <strong>場所：</strong> 帝国ホテル 鳳凰の間</p>
-                        <p><i class="fa-solid fa-wallet text-[#dfc475] mr-1"></i> <strong>会費：</strong> 15,000円 (事前振込制)</p>
-                    </div>
-                </div>
-            </div>
+  // 同伴者の名前を変更する処理
+  const handleCompanionNameChange = (id, val) => {
+    setCompanions(companions.map(c => c.id === id ? { ...c, name: val } : c));
+  };
 
-            <!-- 出欠状況チェック/確認エリア (メールアドレス入力による照会) -->
-            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 no-print">
-                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <i class="fa-solid fa-magnifying-glass text-[#b89742]"></i>
-                    登録内容の確認・QRコードの表示
-                </h3>
-                <p class="text-sm text-slate-600 mb-4">すでに回答を送信された方は、登録したメールアドレスを入力して「QRコードを表示する」を押してください。振込確認が完了している場合、当日の受付用QRコードが表示されます。</p>
-                <div class="flex flex-col sm:flex-row gap-2 max-w-md">
-                    <input type="email" id="search-guest-email" placeholder="登録したメールアドレスを入力" class="flex-grow px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                    <button onclick="checkGuestStatus()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
-                        確認する <i class="fa-solid fa-arrow-right"></i>
-                    </button>
-                </div>
-                
-                <!-- 照会結果表示エリア -->
-                <div id="guest-status-result" class="mt-4 hidden p-5 rounded-lg border">
-                    <!-- 動的に中身が挿入されます -->
-                </div>
-            </div>
+  // 出欠登録送信処理
+  const handleRSVPSubmit = async (e) => {
+    e.preventDefault();
+    if (!repName.trim() || !repEmail.trim() || !repPhone.trim()) {
+      alert("必須項目を入力してください。");
+      return;
+    }
 
-            <!-- 出欠登録フォーム -->
-            <div id="form-container" class="bg-white rounded-xl p-6 md:p-8 shadow-sm border border-slate-200 no-print">
-                <h3 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 border-b pb-3 border-slate-100">
-                    <i class="fa-solid fa-pen-to-square text-[#b89742]"></i>
-                    新規出欠回答フォーム
-                </h3>
-                
-                <form id="attendance-form" onsubmit="handleFormSubmit(event)" class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- 出欠選択 -->
-                        <div class="md:col-span-2">
-                            <label class="block text-sm font-bold text-slate-700 mb-2">ご出欠 <span class="text-red-500">*</span></label>
-                            <div class="grid grid-cols-2 gap-4">
-                                <label class="flex items-center justify-center p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all [&:has(input:checked)]:border-[#b89742] [&:has(input:checked)]:bg-amber-50/50">
-                                    <input type="radio" name="attendance" value="出席" required class="sr-only" checked>
-                                    <span class="text-base font-bold flex items-center gap-2">
-                                        <i class="fa-solid fa-circle-check text-emerald-500"></i> ご出席
-                                    </span>
-                                </label>
-                                <label class="flex items-center justify-center p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all [&:has(input:checked)]:border-slate-400 [&:has(input:checked)]:bg-slate-100">
-                                    <input type="radio" name="attendance" value="欠席" class="sr-only">
-                                    <span class="text-base font-bold text-slate-500 flex items-center gap-2">
-                                        <i class="fa-solid fa-circle-xmark text-rose-500"></i> ご欠席
-                                    </span>
-                                </label>
-                            </div>
-                        </div>
+    try {
+      const parentId = crypto.randomUUID();
+      const batchPromises = [];
+      const timestamp = Date.now();
 
-                        <!-- お名前 -->
-                        <div>
-                            <label for="input-name" class="block text-sm font-bold text-slate-700 mb-1">お名前 <span class="text-red-500">*</span></label>
-                            <input type="text" id="input-name" required placeholder="例：山田 太郎" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        </div>
+      // 1. 代表者の登録
+      const repData = {
+        id: parentId,
+        parentId: parentId,
+        name: repName,
+        email: repEmail.trim().toLowerCase(),
+        phone: repPhone,
+        notes: repNotes,
+        isRepresentative: true,
+        isPaid: false,
+        isPresent: false,
+        groupColor: 'none',
+        createdAt: timestamp,
+        companionCount: companions.length
+      };
 
-                        <!-- フリガナ -->
-                        <div>
-                            <label for="input-kana" class="block text-sm font-bold text-slate-700 mb-1">フリガナ <span class="text-red-500">*</span></label>
-                            <input type="text" id="input-kana" required placeholder="例：ヤマダ タロウ" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        </div>
+      const repDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', parentId);
+      batchPromises.push(setDoc(repDocRef, repData));
 
-                        <!-- メールアドレス -->
-                        <div>
-                            <label for="input-email" class="block text-sm font-bold text-slate-700 mb-1">メールアドレス <span class="text-red-500">*</span></label>
-                            <p class="text-xs text-slate-500 mb-1">※事前振込のご案内・QRコード通知のために使用します。</p>
-                            <input type="email" id="input-email" required placeholder="例：yamada@example.com" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        </div>
+      // 2. 同伴者の登録
+      companions.forEach((companion) => {
+        if (companion.name.trim() === '') return;
+        const compId = companion.id;
+        const compData = {
+          id: compId,
+          parentId: parentId,
+          name: companion.name,
+          email: repEmail.trim().toLowerCase(), // 同伴者も代表者のメアドに紐づく
+          phone: repPhone,
+          notes: `同伴者 (代表: ${repName})`,
+          isRepresentative: false,
+          isPaid: false,
+          isPresent: false,
+          groupColor: 'none',
+          createdAt: timestamp
+        };
+        const compDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', compId);
+        batchPromises.push(setDoc(compDocRef, compData));
+      });
 
-                        <!-- 会社・組織・役職 -->
-                        <div>
-                            <label for="input-organization" class="block text-sm font-bold text-slate-700 mb-1">御社名・御役職など</label>
-                            <p class="text-xs text-slate-500 mb-1">※芳名帳への記載に使用させていただきます。</p>
-                            <input type="text" id="input-organization" placeholder="例：株式会社〇〇 代表取締役" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        </div>
+      await Promise.all(batchPromises);
 
-                        <!-- メッセージ -->
-                        <div class="md:col-span-2">
-                            <label for="input-message" class="block text-sm font-bold text-slate-700 mb-1">お祝いメッセージ</label>
-                            <textarea id="input-message" rows="3" placeholder="お祝いの言葉や、主催者へのメッセージがございましたらご記入ください。" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]"></textarea>
-                        </div>
-                    </div>
+      // 成功時状態を保持
+      setRsvpSuccess({
+        repName,
+        repEmail,
+        companionCount: companions.length,
+        companions: companions.filter(c => c.name.trim() !== '')
+      });
 
-                    <div class="pt-4 flex justify-center">
-                        <button type="submit" class="w-full md:w-80 bg-gold-gradient hover:opacity-90 text-slate-950 font-bold text-lg py-3 rounded-xl shadow-md transition-all duration-200 transform hover:-translate-y-0.5">
-                            送信する <i class="fa-solid fa-paper-plane ml-1"></i>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+      // フォーム初期化
+      setRepName('');
+      setRepEmail('');
+      setRepPhone('');
+      setRepNotes('');
+      setCompanions([]);
 
+    } catch (err) {
+      console.error("RSVP Save Error: ", err);
+    }
+  };
 
-        <!-- ============================================== -->
-        <!-- 2. 主催者用管理画面ビュー (リスト・振込・QR読込) -->
-        <!-- ============================================== -->
-        <div id="view-admin" class="space-y-6 hidden no-print">
-            
-            <!-- 管理画面ダッシュボードサマリー -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 font-bold">登録総数</p>
-                        <h4 id="stat-total" class="text-2xl font-bold text-slate-800">0 名</h4>
-                    </div>
-                    <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                        <i class="fa-solid fa-users"></i>
-                    </div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 font-bold">出席予定</p>
-                        <h4 id="stat-attending" class="text-2xl font-bold text-emerald-600">0 名</h4>
-                    </div>
-                    <div class="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
-                        <i class="fa-solid fa-circle-check"></i>
-                    </div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 font-bold">振込確認済</p>
-                        <h4 id="stat-paid" class="text-2xl font-bold text-blue-600">0 名</h4>
-                    </div>
-                    <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                        <i class="fa-solid fa-money-check-dollar"></i>
-                    </div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 font-bold">当日の来場済</p>
-                        <h4 id="stat-checkedin" class="text-2xl font-bold text-indigo-600">0 名</h4>
-                    </div>
-                    <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                        <i class="fa-solid fa-id-card"></i>
-                    </div>
-                </div>
-            </div>
+  // マイチケットの確認（メールアドレス検索）
+  const handleSearchTicket = (e) => {
+    e.preventDefault();
+    if (!searchEmail.trim()) return;
 
-            <!-- 当日受付用：QRコードスキャナーセクション -->
-            <div class="bg-slate-900 text-white rounded-xl p-6 shadow-md border border-[#b89742]/50">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                    <div>
-                        <h3 class="text-lg font-bold text-[#dfc475] flex items-center gap-2">
-                            <i class="fa-solid fa-qrcode"></i>
-                            【当日受付用】QRコードスキャン
-                        </h3>
-                        <p class="text-xs text-slate-300 mt-1">来場者のスマートフォンに表示された「受付用QRコード」をスキャンしてください。</p>
-                    </div>
-                    <!-- カメラ起動/停止トグル -->
-                    <div class="flex gap-2">
-                        <button id="btn-start-scanner" onclick="startScanner()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1 transition-all">
-                            <i class="fa-solid fa-camera"></i> カメラ起動
-                        </button>
-                        <button id="btn-stop-scanner" onclick="stopScanner()" class="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1 transition-all hidden">
-                            <i class="fa-solid fa-video-slash"></i> 停止
-                        </button>
-                    </div>
-                </div>
+    const emailQuery = searchEmail.trim().toLowerCase();
+    const matches = rsvps.filter(r => r.email === emailQuery);
 
-                <!-- スキャナーのビデオ表示領域 -->
-                <div class="flex flex-col items-center justify-center">
-                    <div id="reader-container" class="w-full max-w-sm overflow-hidden rounded-lg bg-slate-950 border border-slate-700 relative hidden">
-                        <div id="reader" style="width: 100%;"></div>
-                        <div class="absolute inset-0 border-2 border-[#dfc475] animate-pulse pointer-events-none opacity-40"></div>
-                    </div>
-                    
-                    <!-- スキャン成功/エラー表示のインライン通知エリア -->
-                    <div id="scan-feedback" class="w-full max-w-md mt-4 p-4 rounded-lg text-center font-bold hidden">
-                        <!-- 動的に通知テキストとスタイルが割り当てられます -->
-                    </div>
-                </div>
-            </div>
+    if (matches.length === 0) {
+      setTicketSearchError("該当するメールアドレスの登録が見つかりません。");
+      setMyTickets([]);
+    } else {
+      setMyTickets(matches);
+      setTicketSearchError('');
+    }
+  };
 
-            <!-- ゲストリストテーブル -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-list-check text-[#b89742]"></i>
-                        ゲスト出席状況・振込・受付一覧
-                    </h3>
-                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <!-- 検索窓 -->
-                        <div class="relative flex-grow">
-                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </span>
-                            <input type="text" id="admin-search" oninput="renderAdminList()" placeholder="名前・フリガナ・組織で検索..." class="w-full sm:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        </div>
-                        <!-- テストデータの投入 & 全クリア -->
-                        <div class="flex gap-1 justify-end">
-                            <button onclick="injectSampleData()" class="px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 rounded border border-slate-300 font-semibold" title="テスト用にサンプルを3件追加">
-                                <i class="fa-solid fa-vial"></i> デモ追加
-                            </button>
-                            <button onclick="clearAllData()" class="px-2 py-1 text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 rounded border border-rose-200 font-semibold" title="すべてのデータを削除">
-                                <i class="fa-solid fa-trash-can"></i> 全削除
-                            </button>
-                        </div>
-                    </div>
-                </div>
+  // 管理者ログイン
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (adminPassword === 'admin123' || adminPassword === '911') {
+      setIsAdminAuthenticated(true);
+      setAdminError('');
+    } else {
+      setAdminError('パスワードが正しくありません。');
+    }
+  };
 
-                <!-- ゲストリスト（テーブルレスポンシブ） -->
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-500 text-xs font-bold uppercase border-b border-slate-200">
-                                <th class="px-6 py-3">名前 / 所属</th>
-                                <th class="px-6 py-3">出欠回答</th>
-                                <th class="px-6 py-3">会費振込</th>
-                                <th class="px-6 py-3">当日の受付</th>
-                                <th class="px-6 py-3 text-center">受付QR</th>
-                                <th class="px-6 py-3 text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-table-body" class="divide-y divide-slate-100 text-sm">
-                            <!-- JSにて動的に行をレンダリングします -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <div id="admin-empty-state" class="p-8 text-center text-slate-400 hidden">
-                    <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
-                    <p>登録されたゲストデータはまだありません。</p>
-                </div>
-            </div>
-        </div>
+  // 支払いステータス切り替え
+  const handleTogglePayment = async (id, currentStatus) => {
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', id);
+      await updateDoc(docRef, { isPaid: !currentStatus });
+    } catch (err) {
+      console.error("Payment Update Error: ", err);
+    }
+  };
 
-    </main>
+  // 出席ステータス切り替え
+  const handleTogglePresence = async (id, currentStatus) => {
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', id);
+      await updateDoc(docRef, { isPresent: !currentStatus });
+    } catch (err) {
+      console.error("Presence Update Error: ", err);
+    }
+  };
 
-    <!-- フッター -->
-    <footer class="bg-slate-900 text-slate-400 text-xs text-center py-6 mt-12 border-t border-slate-800 no-print">
-        <p class="mb-2">旭日中授章 受章お祝い会 運営事務局</p>
-        <p>&copy; 2026 受勲記念パーティー管理システム All Rights Reserved.</p>
-    </footer>
+  // グループ（色）変更
+  const handleChangeGroupColor = async (id, colorId) => {
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', id);
+      await updateDoc(docRef, { groupColor: colorId });
+    } catch (err) {
+      console.error("Group Update Error: ", err);
+    }
+  };
 
-    <!-- ============================================== -->
-    <!-- モーダル：QRコード表示用ポップアップ（ゲスト個別表示） -->
-    <!-- ============================================== -->
-    <div id="qr-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
-        <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-slate-100 relative">
-            <button onclick="closeQrModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-            <h4 class="text-lg font-bold text-slate-800 font-serif-jp">出席受付用QRコード</h4>
-            <p id="qr-modal-guest-name" class="font-bold text-[#b89742]"></p>
-            <div class="flex justify-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <div id="modal-qrcode-container"></div>
-            </div>
-            <div class="bg-amber-50 p-3 rounded-lg text-xs text-amber-800 text-left border border-amber-200">
-                <p class="font-bold mb-1"><i class="fa-solid fa-circle-info"></i> 受付方法</p>
-                <p>当日の受付にて、この画面をご提示ください。スタッフがQRコードを読み取ることで受付が完了いたします。</p>
-            </div>
-            
-            <div class="flex gap-2">
-                <button id="modal-print-btn" onclick="" class="flex-1 bg-slate-900 hover:bg-slate-800 text-[#dfc475] font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1 shadow-md">
-                    <i class="fa-solid fa-print"></i> 受付票印刷
-                </button>
-                <button onclick="closeQrModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 rounded-lg text-xs">
-                    閉じる
-                </button>
-            </div>
-        </div>
-    </div>
+  // 備考の保存
+  const handleSaveNotes = async (id) => {
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', id);
+      await updateDoc(docRef, { notes: editingNotes[id] || '' });
+      alert("備考を更新しました。");
+    } catch (err) {
+      console.error("Notes Update Error: ", err);
+    }
+  };
 
-    <!-- ============================================== -->
-    <!-- JSロジック -->
-    <!-- ============================================== -->
-    <script>
-        // --- 状態管理 (State) ---
-        // データの永続化として localStorage を活用します
-        let guests = [];
-        let html5QrCode = null;
+  const handleNotesChange = (id, val) => {
+    setEditingNotes({
+      ...editingNotes,
+      [id]: val
+    });
+  };
 
-        // --- 初期設定・起動時処理 ---
-        window.onload = function() {
-            loadGuestsData();
-            // 初期状態ではゲスト用画面を表示
-            switchView('guest');
+  // データの削除
+  const handleDeleteRsvp = async (id) => {
+    if (confirm("この登録データを削除してもよろしいですか？")) {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', id);
+        await deleteDoc(docRef);
+      } catch (err) {
+        console.error("Delete Error: ", err);
+      }
+    }
+  };
+
+  // カメラを使用したQRコードスキャナーの起動
+  const startScanner = () => {
+    if (!scannerLoaded) {
+      alert("QRスキャナーライブラリの読み込み中です。しばらくお待ちください。");
+      return;
+    }
+    setActiveScanner(true);
+    setScannerFeedback({ type: '', message: '' });
+
+    // HTML5 QrCodeの初期化
+    setTimeout(() => {
+      try {
+        const html5QrCode = new window.Html5Qrcode("qr-reader");
+        html5QrCodeInstance.current = html5QrCode;
+
+        const qrCodeSuccessCallback = async (decodedText) => {
+          // デコードされたテキストが出席者ID
+          await processCheckIn(decodedText);
         };
 
-        // ローローカルストレージからデータをロード
-        function loadGuestsData() {
-            const data = localStorage.getItem('celebration_guests');
-            if (data) {
-                guests = JSON.parse(data);
-            } else {
-                guests = [];
-            }
-            updateStats();
-        }
-
-        // ローカルストレージへデータを保存
-        function saveGuestsData() {
-            localStorage.setItem('celebration_guests', JSON.stringify(guests));
-            updateStats();
-        }
-
-        // ダッシュボードの統計情報を更新
-        function updateStats() {
-            const total = guests.length;
-            const attending = guests.filter(g => g.attendance === '出席').length;
-            const paid = guests.filter(g => g.paid === true).length;
-            const checkedIn = guests.filter(g => g.checkedIn === true).length;
-
-            document.getElementById('stat-total').innerText = total + ' 名';
-            document.getElementById('stat-attending').innerText = attending + ' 名';
-            document.getElementById('stat-paid').innerText = paid + ' 名';
-            document.getElementById('stat-checkedin').innerText = checkedIn + ' 名';
-        }
-
-        // 画面のタブ切り替え
-function switchView(view) {
-    if (view === 'admin') {
-        const password = prompt("管理者パスワードを入力してください");
-        // ここにパスワードを設定します（例: "admin123"）
-        if (password !== "admin123") {
-            alert("パスワードが違います");
-            return; // 管理画面へは移動させない
-        }
-    }
-    
-    document.getElementById('view-guest').classList.toggle('hidden', view !== 'guest');
-    document.getElementById('view-admin').classList.toggle('hidden', view !== 'admin');
-    
-    // 管理画面を開いた時にリストを更新する
-    if (view === 'admin') {
-        renderAdminList();
-    }
-}
-                
-                // ボタンのハイライト
-                btnGuest.className = "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-gold-gradient text-slate-950 shadow";
-                btnAdmin.className = "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white";
-                
-                // カメラを停止しておく
-                stopScanner();
-            } else {
-                viewGuest.classList.add('hidden');
-                viewAdmin.classList.remove('hidden');
-                
-                btnGuest.className = "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white";
-                btnAdmin.className = "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-gold-gradient text-slate-950 shadow";
-                
-                // 管理者リストを再描画
-                renderAdminList();
-            }
-        }
-
-        // --- ゲスト回答フォームの送信処理 ---
-        function handleFormSubmit(event) {
-            event.preventDefault();
-
-            const attendance = document.querySelector('input[name="attendance"]:checked').value;
-            const name = document.getElementById('input-name').value.trim();
-            const kana = document.getElementById('input-kana').value.trim();
-            const email = document.getElementById('input-email').value.trim().toLowerCase();
-            const organization = document.getElementById('input-organization').value.trim();
-            const message = document.getElementById('input-message').value.trim();
-
-            if (!name || !kana || !email) {
-                showSimpleMessage('入力エラー', '必須項目をすべて入力してください。', 'error');
-                return;
-            }
-
-            // 同一メールアドレスの重複チェック
-            const existing = guests.find(g => g.email === email);
-            if (existing) {
-                showSimpleMessage('登録済み', 'このメールアドレスは既に登録されています。「登録内容の確認」からご確認ください。', 'warning');
-                return;
-            }
-
-            // ユニークIDを生成
-            const id = 'GST-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-
-            const newGuest = {
-                id: id,
-                name: name,
-                kana: kana,
-                email: email,
-                organization: organization || '（なし）',
-                message: message || '',
-                attendance: attendance,
-                paid: false,       // 初期は未払い
-                checkedIn: false,  // 初期は未受付
-                createdAt: new Date().toLocaleString('ja-JP')
-            };
-
-            guests.push(newGuest);
-            saveGuestsData();
-
-            // フォームリセット
-            document.getElementById('attendance-form').reset();
-
-            // 完了メッセージと振込案内をその場で提示
-            showFormResult(newGuest);
-        }
-
-        // フォーム送信直後の結果表示
-        function showFormResult(guest) {
-            const formContainer = document.getElementById('form-container');
-            
-            let resultHtml = `
-                <div class="text-center py-6 space-y-4">
-                    <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl">
-                        <i class="fa-solid fa-circle-check"></i>
-                    </div>
-                    <h4 class="text-xl font-bold text-slate-800">ご登録ありがとうございました</h4>
-                    <p class="text-sm text-slate-600 max-w-md mx-auto">
-                        ${guest.name} 様、出欠登録（ご${guest.attendance}）を承りました。<br>
-                        登録内容の控えと事前振込に関するご案内をご入力のメールアドレス宛てに送信いたしました（シミュレーション）。
-                    </p>
-            `;
-
-            if (guest.attendance === '出席') {
-                resultHtml += `
-                    <!-- 振込のご案内 -->
-                    <div class="mt-6 p-5 bg-amber-50 rounded-xl border border-amber-200 text-left max-w-xl mx-auto space-y-3">
-                        <h5 class="font-bold text-amber-900 border-b border-amber-200 pb-2 flex items-center gap-2">
-                            <i class="fa-solid fa-envelope-open-text"></i> 会費事前振込のご案内
-                        </h5>
-                        <p class="text-xs text-amber-800 leading-relaxed">
-                            お手数ではございますが、円滑な受付準備のため、期日までに下記口座へ会費のお振込みをお願い申し上げます。
-                        </p>
-                        <div class="bg-white p-3 rounded border border-amber-100 text-xs text-slate-700 space-y-1 font-mono">
-                            <p><strong>【振込金額】</strong> 15,000円（お一人様につき）</p>
-                            <p><strong>【振込期限】</strong> 2026年10月31日（金）</p>
-                            <p><strong>【振込先】</strong> 葵銀行　東京中央支店（普通） 1234567</p>
-                            <p><strong>【口座名義】</strong> 旭日中授章お祝い会 事務局</p>
-                            <p>※お振込の際、お名前の前に<strong>「${guest.id}」</strong>をご入力ください。</p>
-                        </div>
-                        <p class="text-xs text-rose-700 font-bold">
-                            ⚠️ 事務局にてお振込み確認後、個別受付用の「QRコード」が発行されます。再度本ページよりメールアドレスを入力して確認・表示可能となります。
-                        </p>
-                    </div>
-                `;
-            }
-
-            resultHtml += `
-                    <div class="pt-4">
-                        <button onclick="resetToNewForm()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-2 rounded-lg transition-colors text-sm">
-                            新しく回答を登録する
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            formContainer.innerHTML = resultHtml;
-        }
-
-        // フォーム再表示
-        function resetToNewForm() {
-            location.reload(); // 状態をシンプルにするため、ページをリロードして初期状態にします
-        }
-
-        // --- 登録内容確認/QR表示 (ゲスト照会) ---
-        function checkGuestStatus() {
-            const emailInput = document.getElementById('search-guest-email').value.trim().toLowerCase();
-            const resultDiv = document.getElementById('guest-status-result');
-
-            if (!emailInput) {
-                showSimpleMessage('注意', 'メールアドレスを入力してください。', 'warning');
-                return;
-            }
-
-            const guest = guests.find(g => g.email === emailInput);
-            
-            resultDiv.classList.remove('hidden');
-            resultDiv.className = "mt-4 p-5 rounded-lg border bg-white shadow-sm transition-all duration-300";
-
-            if (!guest) {
-                resultDiv.innerHTML = `
-                    <div class="flex items-center gap-3 text-rose-600">
-                        <i class="fa-solid fa-circle-exclamation text-2xl"></i>
-                        <div>
-                            <p class="font-bold">登録が見つかりませんでした</p>
-                            <p class="text-xs text-slate-500">メールアドレスが正しいか、または再度新規の出欠フォームからご回答ください。</p>
-                        </div>
-                    </div>
-                `;
-                return;
-            }
-
-            // 欠席の場合
-            if (guest.attendance === '欠席') {
-                resultDiv.innerHTML = `
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-3 text-slate-500">
-                            <i class="fa-solid fa-circle-xmark text-2xl"></i>
-                            <div>
-                                <p class="font-bold">${guest.name} 様は「ご欠席」で承っております。</p>
-                                <p class="text-xs">ご登録日: ${guest.createdAt}</p>
-                            </div>
-                        </div>
-                        <div class="p-3 bg-slate-50 rounded text-xs text-slate-600">
-                            <strong>お祝いメッセージ:</strong> ${guest.message || '（なし）'}
-                        </div>
-                    </div>
-                `;
-                return;
-            }
-
-            // 出席だが「未払い」の場合
-            if (guest.attendance === '出席' && !guest.paid) {
-                resultDiv.innerHTML = `
-                    <div class="space-y-4">
-                        <div class="flex items-start gap-3 text-amber-600">
-                            <i class="fa-solid fa-circle-info text-2xl mt-0.5"></i>
-                            <div class="flex-grow">
-                                <p class="font-bold">${guest.name} 様は「ご出席」で承っております</p>
-                                <p class="text-xs text-slate-500">会費のお振込が「未確認」となっております。お振込みが確認でき次第、こちらに「受付用QRコード」が表示されます。</p>
-                            </div>
-                            <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded font-bold">振込未確認</span>
-                        </div>
-                        
-                        <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-2 text-slate-700">
-                            <p class="font-bold text-slate-800">【振込案内】</p>
-                            <p><strong>お振込先：</strong> 葵銀行　東京中央支店（普通） 1234567</p>
-                            <p><strong>口座名義：</strong> 旭日中授章お祝い会 事務局</p>
-                            <p><strong>振込金額：</strong> 15,000円</p>
-                            <p>※振込人名義の前に、ID番号 <strong class="text-slate-900 bg-amber-100 px-1 py-0.5 rounded">${guest.id}</strong> を入力してお振込ください。</p>
-                        </div>
-                    </div>
-                `;
-                return;
-            }
-
-            // 出席 ＆ 振込確認済（QRコード表示対象・印刷可能）
-            if (guest.attendance === '出席' && guest.paid) {
-                
-                // すでに当日に受付完了している場合
-                const checkedInBadge = guest.checkedIn 
-                    ? `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> 当日受付完了済</span>`
-                    : `<span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded font-bold">お振込確認済</span>`;
-
-                resultDiv.innerHTML = `
-                    <div class="flex flex-col md:flex-row items-center gap-6 p-2 relative">
-                        <!-- QRコード描画エリア -->
-                        <div class="flex flex-col items-center gap-2">
-                            <div id="status-qrcode" class="p-3 bg-white border border-slate-200 rounded-lg shadow-sm"></div>
-                            <span class="text-xs font-mono font-bold text-slate-500">${guest.id}</span>
-                        </div>
-                        
-                        <!-- 詳細情報 -->
-                        <div class="flex-grow text-center md:text-left space-y-2">
-                            <div class="flex flex-col md:flex-row md:items-center gap-2 justify-center md:justify-start">
-                                <h4 class="text-lg font-bold text-slate-800">${guest.name} 様</h4>
-                                <div class="flex justify-center md:justify-start">${checkedInBadge}</div>
-                            </div>
-                            <p class="text-xs text-slate-500 font-serif-jp">ご所属: ${guest.organization}</p>
-                            
-                            <div class="p-3 bg-slate-50 rounded-lg text-xs text-slate-600 space-y-1 text-left">
-                                <p class="font-bold text-slate-700"><i class="fa-solid fa-hotel text-gold"></i> お祝い会 当日のご案内</p>
-                                <p>・当日はこのQRコードをスマートフォンに表示、または本用紙を印刷して受付にご提示ください。</p>
-                                <p>・開宴：2026年11月23日（祝） 17:00</p>
-                                <p>・会場：帝国ホテル 鳳凰の間</p>
-                            </div>
-
-                            <!-- 印刷ボタンを改善 (ポップアップ式の印刷関数を呼び出す) -->
-                            <div class="pt-2 flex justify-center md:justify-start no-print">
-                                <button onclick="printGuestTicket('${guest.id}')" class="bg-slate-900 hover:bg-slate-800 text-[#dfc475] font-bold px-4 py-2 rounded-lg text-xs flex items-center justify-center gap-2 transition-colors duration-200 shadow-md">
-                                    <i class="fa-solid fa-print"></i> 受付票・QRコードを印刷する
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                // QRコードを生成（少し時間を空けて描画バグを防ぐ）
-                setTimeout(() => {
-                    document.getElementById('status-qrcode').innerHTML = '';
-                    new QRCode(document.getElementById('status-qrcode'), {
-                        text: guest.id,
-                        width: 120,
-                        height: 120,
-                        colorDark : "#0f172a",
-                        colorLight : "#ffffff",
-                        correctLevel : QRCode.CorrectLevel.H
-                    });
-                }, 100);
-            }
-        }
-
-
-        // --- 管理者画面：リスト表示機能 ---
-        function renderAdminList() {
-            const tableBody = document.getElementById('admin-table-body');
-            const emptyState = document.getElementById('admin-empty-state');
-            const searchKeyword = document.getElementById('admin-search').value.trim().toLowerCase();
-
-            tableBody.innerHTML = '';
-
-            // 検索・フィルタリング
-            const filteredGuests = guests.filter(g => {
-                return g.name.toLowerCase().includes(searchKeyword) || 
-                       g.kana.toLowerCase().includes(searchKeyword) ||
-                       g.organization.toLowerCase().includes(searchKeyword) ||
-                       g.id.toLowerCase().includes(searchKeyword);
-            });
-
-            if (filteredGuests.length === 0) {
-                emptyState.classList.remove('hidden');
-                return;
-            } else {
-                emptyState.classList.add('hidden');
-            }
-
-            // テーブル構築
-            filteredGuests.forEach(g => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors duration-150";
-
-                // 出欠バッジスタイル
-                const attBadge = g.attendance === '出席'
-                    ? `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">出席</span>`
-                    : `<span class="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">欠席</span>`;
-
-                // 振込チェックボックス/切替ボタン
-                let paidAction = '---';
-                if (g.attendance === '出席') {
-                    const btnClass = g.paid 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300';
-                    const icon = g.paid ? 'fa-square-check' : 'fa-square';
-                    const text = g.paid ? '振込確認済' : '未確認 (クリックで確認完了へ)';
-                    paidAction = `
-                        <button onclick="togglePaidStatus('${g.id}')" class="px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${btnClass}">
-                            <i class="fa-regular ${icon}"></i> ${text}
-                        </button>
-                    `;
-                }
-
-                // 当日受付チェックボックス/切替ボタン
-                let checkinAction = '---';
-                if (g.attendance === '出席') {
-                    const btnClass = g.checkedIn 
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                        : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-300';
-                    const icon = g.checkedIn ? 'fa-id-card' : 'fa-circle-xmark';
-                    const text = g.checkedIn ? '来場済' : '未チェック (手動受付)';
-                    checkinAction = `
-                        <button onclick="toggleCheckinStatus('${g.id}')" class="px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${btnClass}">
-                            <i class="fa-solid ${icon}"></i> ${text}
-                        </button>
-                    `;
-                }
-
-                // QRコードプレビューボタン
-                let qrPreview = '---';
-                if (g.attendance === '出席' && g.paid) {
-                    qrPreview = `
-                        <button onclick="openQrModal('${g.id}')" class="text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 p-2 rounded-lg text-sm transition-all" title="個別QRを表示">
-                            <i class="fa-solid fa-qrcode"></i> QR
-                        </button>
-                    `;
-                } else if (g.attendance === '出席' && !g.paid) {
-                    qrPreview = `<span class="text-xs text-slate-400">振込確認後に表示可能</span>`;
-                }
-
-                tr.innerHTML = `
-                    <td class="px-6 py-4">
-                        <div class="font-bold text-slate-800">${g.name}</div>
-                        <div class="text-xs text-slate-400 font-mono">${g.kana}</div>
-                        <div class="text-xs text-slate-500 mt-1">${g.organization}</div>
-                    </td>
-                    <td class="px-6 py-4">${attBadge}</td>
-                    <td class="px-6 py-4">${paidAction}</td>
-                    <td class="px-6 py-4">${checkinAction}</td>
-                    <td class="px-6 py-4 text-center">${qrPreview}</td>
-                    <td class="px-6 py-4 text-right">
-                        <button onclick="deleteGuest('${g.id}')" class="text-rose-600 hover:text-rose-900 hover:bg-rose-50 p-2 rounded-lg transition-all" title="削除">
-                            <i class="fa-regular fa-trash-can"></i>
-                        </button>
-                    </td>
-                `;
-
-                tableBody.appendChild(tr);
-            });
-        }
-
-        // 振込ステータスのトグル
-        function togglePaidStatus(id) {
-            const guest = guests.find(g => g.id === id);
-            if (guest) {
-                guest.paid = !guest.paid;
-                saveGuestsData();
-                renderAdminList();
-                showFloatToast(`${guest.name}様の支払ステータスを更新しました`);
-            }
-        }
-
-        // 当日受付ステータスのトグル
-        function toggleCheckinStatus(id) {
-            const guest = guests.find(g => g.id === id);
-            if (guest) {
-                guest.checkedIn = !guest.checkedIn;
-                saveGuestsData();
-                renderAdminList();
-                showFloatToast(`${guest.name}様の受付ステータスを更新しました`);
-            }
-        }
-
-        // ゲストの削除
-        function deleteGuest(id) {
-            const guest = guests.find(g => g.id === id);
-            if (guest) {
-                if (confirm(`${guest.name}様のデータを一覧から完全に削除しますか？`)) {
-                    guests = guests.filter(g => g.id !== id);
-                    saveGuestsData();
-                    renderAdminList();
-                }
-            }
-        }
-
-        // --- 当日受付QRスキャン機能 (html5-qrcodeの統合) ---
-        function startScanner() {
-            const container = document.getElementById('reader-container');
-            const btnStart = document.getElementById('btn-start-scanner');
-            const btnStop = document.getElementById('btn-stop-scanner');
-            
-            container.classList.remove('hidden');
-            btnStart.classList.add('hidden');
-            btnStop.classList.remove('hidden');
-
-            document.getElementById('scan-feedback').classList.add('hidden');
-
-            html5QrCode = new Html5Qrcode("reader");
-
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-            // カメラの背面起動を優先
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                config, 
-                onScanSuccess,
-                onScanFailure
-            ).catch(err => {
-                console.error("Camera start error: ", err);
-                showScanFeedback("カメラの起動に失敗しました。カメラ権限を許可するか、手動でチェックインしてください。", "error");
-                stopScanner();
-            });
-        }
-
-        function stopScanner() {
-            const container = document.getElementById('reader-container');
-            const btnStart = document.getElementById('btn-start-scanner');
-            const btnStop = document.getElementById('btn-stop-scanner');
-            
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    html5QrCode = null;
-                }).catch(err => console.error("Camera stop error: ", err));
-            }
-
-            container.classList.add('hidden');
-            btnStart.classList.remove('hidden');
-            btnStop.classList.add('hidden');
-        }
-
-        // QRスキャン成功時
-        function onScanSuccess(decodedText, decodedResult) {
-            console.log(`Scan result: ${decodedText}`);
-            
-            // 音を鳴らす (可能ならブラウザで電子音を合成)
-            playBeep();
-
-            // デコードしたテキスト（ゲストID）に合致するユーザーを検索
-            const targetId = decodedText.trim();
-            const guest = guests.find(g => g.id === targetId);
-
-            if (!guest) {
-                showScanFeedback(`該当するゲストが見つかりません: ${targetId}`, "error");
-                return;
-            }
-
-            if (guest.attendance !== '出席') {
-                showScanFeedback(`警告: ${guest.name}様は「ご欠席」として回答されています。`, "warning");
-                return;
-            }
-
-            if (!guest.paid) {
-                showScanFeedback(`警告: ${guest.name}様は「会費未振込」となっています。`, "warning");
-                return;
-            }
-
-            if (guest.checkedIn) {
-                showScanFeedback(`すでに受付済です: ${guest.name}様`, "info");
-                return;
-            }
-
-            // 受付完了処理
-            guest.checkedIn = true;
-            saveGuestsData();
-            renderAdminList(); // リスト再描画
-
-            showScanFeedback(`受付完了しました！\n${guest.name} 様 (${guest.organization})`, "success");
-        }
-
-        // スキャン継続失敗時は無視
-        function onScanFailure(error) {
-            // console.warn(`Code scan error = ${error}`);
-        }
-
-        // スキャン後のフィードバックメッセージ表示
-        function showScanFeedback(message, type) {
-            const feedbackDiv = document.getElementById('scan-feedback');
-            feedbackDiv.classList.remove('hidden');
-            
-            // メッセージ改行対応
-            feedbackDiv.innerText = message;
-
-            if (type === 'success') {
-                feedbackDiv.className = "w-full max-w-md mt-4 p-4 rounded-lg text-center font-bold bg-emerald-100 text-emerald-800 border-2 border-emerald-500 animate-bounce";
-            } else if (type === 'warning') {
-                feedbackDiv.className = "w-full max-w-md mt-4 p-4 rounded-lg text-center font-bold bg-amber-100 text-amber-800 border-2 border-amber-500";
-            } else if (type === 'info') {
-                feedbackDiv.className = "w-full max-w-md mt-4 p-4 rounded-lg text-center font-bold bg-blue-100 text-blue-800 border-2 border-blue-500";
-            } else {
-                feedbackDiv.className = "w-full max-w-md mt-4 p-4 rounded-lg text-center font-bold bg-rose-100 text-rose-800 border-2 border-rose-500";
-            }
-        }
-
-        // 電子音合成音 (Web Audio API)
-        function playBeep() {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note (ピーッという高音)
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.15); // 0.15秒鳴らす
-            } catch (e) {
-                console.log("Audio feedback not supported in this browser environment.");
-            }
-        }
-
-        // --- 個別表示用のQRコードモーダル ---
-        function openQrModal(id) {
-            const guest = guests.find(g => g.id === id);
-            if (!guest) return;
-
-            document.getElementById('qr-modal-guest-name').innerText = guest.name + ' 様';
-            
-            const qrContainer = document.getElementById('modal-qrcode-container');
-            qrContainer.innerHTML = ''; // クリア
-
-            // QRコード作成
-            new QRCode(qrContainer, {
-                text: guest.id,
-                width: 180,
-                height: 180,
-                colorDark : "#0f172a",
-                colorLight : "#ffffff",
-                correctLevel : QRCode.CorrectLevel.H
-            });
-
-            // モーダルの印刷ボタンにも印刷イベントをバインド
-            document.getElementById('modal-print-btn').onclick = function() {
-                printGuestTicket(guest.id);
-            };
-
-            document.getElementById('qr-modal').classList.remove('hidden');
-        }
-
-        function closeQrModal() {
-            document.getElementById('qr-modal').classList.add('hidden');
-        }
-
-        // ==============================================
-        // 改善された印刷処理 (iFrame内での制限を完全に回避するポップアップ印刷方式)
-        // ==============================================
-        function printGuestTicket(id) {
-            const guest = guests.find(g => g.id === id);
-            if (!guest) return;
-
-            // 1. 新しいウィンドウをポップアップで開く
-            const printWindow = window.open('', '_blank', 'width=800,height=900');
-            if (!printWindow) {
-                showSimpleMessage('ポップアップ制限', '印刷画面を開くことができませんでした。ブラウザの「ポップアップを許可」に設定し、再度お試しください。', 'warning');
-                return;
-            }
-
-            // 2. 一時的なDivをDOMから切り離して作成し、そこにQRCode.jsでQR画像をレンダリング
-            const tempDiv = document.createElement('div');
-            new QRCode(tempDiv, {
-                text: guest.id,
-                width: 200,
-                height: 200,
-                colorDark : "#0f172a",
-                colorLight : "#ffffff",
-                correctLevel : QRCode.CorrectLevel.H
-            });
-
-            // 3. QRCode.jsが画像(imgまたはcanvas)を出力するまでわずかな遅延を挟んで処理
-            setTimeout(() => {
-                const qrImg = tempDiv.querySelector('img') ? tempDiv.querySelector('img').src : '';
-                const qrCanvas = tempDiv.querySelector('canvas') ? tempDiv.querySelector('canvas').toDataURL() : '';
-                const finalQrSrc = qrImg || qrCanvas;
-
-                // 4. 新規ウィンドウ側に高品質な受付票のHTML・CSSを注入
-                const htmlContent = `
-                    <!DOCTYPE html>
-                    <html lang="ja">
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>出席受付票 - ${guest.name}様</title>
-                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                        <style>
-                            body {
-                                font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
-                                color: #1e293b;
-                                background-color: #ffffff;
-                                padding: 40px;
-                                max-width: 600px;
-                                margin: 0 auto;
-                                line-height: 1.6;
-                            }
-                            .ticket-container {
-                                border: 3px double #b89742;
-                                border-radius: 16px;
-                                padding: 35px;
-                                text-align: center;
-                                background: #ffffff;
-                                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-                            }
-                            .header {
-                                border-bottom: 2px solid #dfc475;
-                                padding-bottom: 15px;
-                                margin-bottom: 25px;
-                            }
-                            .title {
-                                font-size: 24px;
-                                font-weight: bold;
-                                color: #0f172a;
-                                letter-spacing: 0.1em;
-                            }
-                            .subtitle {
-                                font-size: 13px;
-                                color: #64748b;
-                                margin-top: 5px;
-                                font-weight: bold;
-                            }
-                            .guest-info {
-                                margin: 25px 0;
-                            }
-                            .guest-name {
-                                font-size: 26px;
-                                font-weight: bold;
-                                color: #0f172a;
-                            }
-                            .guest-org {
-                                font-size: 14px;
-                                color: #475569;
-                                margin-top: 6px;
-                            }
-                            .qr-area {
-                                margin: 25px 0;
-                                display: inline-block;
-                                padding: 15px;
-                                border: 1px solid #e2e8f0;
-                                border-radius: 12px;
-                                background: #ffffff;
-                            }
-                            .qr-img {
-                                width: 180px;
-                                height: 180px;
-                            }
-                            .qr-id {
-                                font-family: monospace;
-                                font-weight: bold;
-                                color: #64748b;
-                                margin-top: 8px;
-                                display: block;
-                                letter-spacing: 0.05em;
-                            }
-                            .event-info {
-                                background: #f8fafc;
-                                border: 1px solid #e2e8f0;
-                                border-radius: 10px;
-                                padding: 20px;
-                                text-align: left;
-                                font-size: 13px;
-                                margin-top: 25px;
-                            }
-                            .event-info-title {
-                                font-weight: bold;
-                                color: #0f172a;
-                                margin-bottom: 10px;
-                                border-b: 1px solid #e2e8f0;
-                                padding-bottom: 6px;
-                                display: flex;
-                                items-center: center;
-                                gap: 6px;
-                            }
-                            .event-info p {
-                                margin: 6px 0;
-                            }
-                            .footer-note {
-                                font-size: 11px;
-                                color: #94a3b8;
-                                margin-top: 30px;
-                                border-top: 1px solid #f1f5f9;
-                                padding-top: 15px;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="ticket-container">
-                            <div class="header">
-                                <div class="title">旭日中授章 受章お祝い会</div>
-                                <div class="subtitle">出席受付票（当日お持ちください）</div>
-                            </div>
-                            
-                            <div class="guest-info">
-                                <div class="guest-name">${guest.name} 様</div>
-                                <div class="guest-org">${guest.organization}</div>
-                            </div>
-
-                            <div class="qr-area">
-                                <img class="qr-img" src="${finalQrSrc}" alt="QRコード">
-                                <span class="qr-id">${guest.id}</span>
-                            </div>
-
-                            <div class="event-info">
-                                <div class="event-info-title">
-                                    <i class="fa-solid fa-hotel" style="color:#b89742"></i> お祝い会 当日のご案内
-                                </div>
-                                <p><strong>【日時】</strong> 2026年11月23日（祝） 17:00開宴 (16:30受付開始)</p>
-                                <p><strong>【場所】</strong> 帝国ホテル 鳳凰の間</p>
-                                <p><strong>【受付方法】</strong> 本用紙を印刷して当日受付にご提示いただくか、スマートフォンにこのQRコードを表示してご提示ください。</p>
-                            </div>
-
-                            <div class="footer-note">
-                                旭日中授章 受章お祝い会 運営事務局
-                            </div>
-                        </div>
-                        <script>
-                            window.onload = function() {
-                                // ページが読み込まれたら即座に印刷ダイアログを起動
-                                setTimeout(function() {
-                                    window.print();
-                                }, 300);
-                            }
-                        <\/script>
-                    </body>
-                    </html>
-                `;
-
-                printWindow.document.write(htmlContent);
-                printWindow.document.close();
-            }, 250);
-        }
-
-        // --- ヘルパー機能 (デモデータやトースト表示) ---
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
         
-        // 簡易トースト表示
-        function showFloatToast(message) {
-            const toast = document.createElement('div');
-            toast.className = "fixed bottom-4 right-4 bg-slate-900 text-[#dfc475] px-4 py-3 rounded-xl shadow-lg border border-[#b89742] flex items-center gap-2 z-50 text-sm transition-all duration-300 opacity-0 transform translate-y-2";
-            toast.innerHTML = `<i class="fa-solid fa-bell"></i> <span>${message}</span>`;
-            document.body.appendChild(toast);
-            
-            // アニメーション表示
-            setTimeout(() => {
-                toast.classList.remove('opacity-0', 'translate-y-2');
-                toast.classList.add('opacity-100', 'translate-y-0');
-            }, 10);
+        // 背面カメラを優先して起動
+        html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          qrCodeSuccessCallback
+        ).catch(err => {
+          console.warn("Camera start fallback to default: ", err);
+          // カメラ起動エラー時はインラインカメラのリストを試行、またはエラーフィードバック
+          html5QrCode.start(
+            { facingMode: "user" },
+            config,
+            qrCodeSuccessCallback
+          ).catch(e => {
+            console.error("Could not start camera: ", e);
+            setScannerFeedback({
+              type: 'error',
+              message: 'カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。'
+            });
+          });
+        });
+      } catch (err) {
+        console.error("Scanner Setup Error: ", err);
+      }
+    }, 300);
+  };
 
-            // 3秒後に消滅
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-2');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
+  // スキャナーの停止
+  const stopScanner = () => {
+    if (html5QrCodeInstance.current) {
+      html5QrCodeInstance.current.stop().then(() => {
+        html5QrCodeInstance.current = null;
+        setActiveScanner(false);
+      }).catch(err => {
+        console.error("Failed to stop scanner: ", err);
+        setActiveScanner(false);
+      });
+    } else {
+      setActiveScanner(false);
+    }
+  };
 
-        // 手動メッセージ表示
-        function showSimpleMessage(title, text, type) {
-            const icon = type === 'error' ? 'fa-circle-xmark text-rose-500' : (type === 'warning' ? 'fa-triangle-exclamation text-amber-500' : 'fa-circle-info text-blue-500');
-            const alertBox = document.createElement('div');
-            alertBox.className = "fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in";
-            alertBox.innerHTML = `
-                <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl text-center space-y-4">
-                    <i class="fa-solid ${icon} text-4xl"></i>
-                    <h5 class="text-lg font-bold text-slate-800">${title}</h5>
-                    <p class="text-sm text-slate-600">${text}</p>
-                    <button onclick="this.closest('.fixed').remove()" class="w-full bg-slate-900 text-white font-bold py-2 rounded-lg hover:bg-slate-800">
-                        確認
-                    </button>
+  // QRコードまたは手動コード入力による受付（チェックイン）処理
+  const processCheckIn = async (rsvpId) => {
+    // 該当する招待客を検索
+    const guest = rsvps.find(r => r.id === rsvpId);
+    if (!guest) {
+      setScannerFeedback({
+        type: 'error',
+        message: `ID: ${rsvpId} に対する出席登録が見つかりません。`
+      });
+      return;
+    }
+
+    if (!guest.isPaid) {
+      setScannerFeedback({
+        type: 'warning',
+        message: `【注意】${guest.name}様は会費未領収です。受付で確認してください。`
+      });
+    }
+
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvps', rsvpId);
+      await updateDoc(docRef, { isPresent: true });
+      
+      setScannerFeedback({
+        type: 'success',
+        message: `${guest.name}様（${GROUP_COLORS.find(g => g.id === guest.groupColor)?.name || '未設定'}グループ）の受付を完了しました。`
+      });
+
+      // 効果音やバイブレーションの模倣
+      if (navigator.vibrate) navigator.vibrate(100);
+
+    } catch (err) {
+      console.error("Check-in update error: ", err);
+      setScannerFeedback({
+        type: 'error',
+        message: 'サーバーデータの更新に失敗しました。'
+      });
+    }
+  };
+
+  // スキャナーがアンマウントされる際のクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (html5QrCodeInstance.current) {
+        html5QrCodeInstance.current.stop().catch(err => console.error("Unmount cleanup error: ", err));
+      }
+    };
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-stone-50 text-stone-800 font-sans antialiased">
+      {/* エレガントなお祝いヘッダー */}
+      <header className="relative bg-gradient-to-r from-red-800 via-rose-900 to-red-900 text-amber-100 shadow-md">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/20 via-transparent to-transparent z-0"></div>
+        
+        <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 flex flex-col items-center text-center relative z-10">
+          {/* 紋章風シンボル */}
+          <div className="w-16 h-16 rounded-full border-2 border-amber-400 bg-red-950/80 flex items-center justify-center mb-4 shadow-inner">
+            <span className="text-2xl font-bold text-amber-300">旭日</span>
+          </div>
+
+          <p className="text-amber-300 text-sm tracking-[0.3em] font-semibold uppercase mb-2">Order of the Rising Sun</p>
+          <h1 className="text-2xl md:text-4xl font-serif font-bold tracking-wider text-white mb-2 leading-tight">
+            旭日中綬章 受章お祝い会
+          </h1>
+          <p className="text-stone-200 text-sm md:text-base max-w-xl mx-auto mt-2 font-light">
+            この度のご受章、心よりお祝い申し上げます。出席登録および当日のスムーズな受付のために本システムを運営いたします。
+          </p>
+
+          {/* 開催情報 */}
+          <div className="mt-6 flex flex-wrap justify-center gap-4 text-xs md:text-sm bg-red-950/40 py-2 px-6 rounded-full border border-red-700/50">
+            <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-amber-400" /> 令和8年9月11日(金)</span>
+            <span className="hidden md:inline text-red-700">|</span>
+            <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-amber-400" /> 13:00 ～ 15:00</span>
+            <span className="hidden md:inline text-red-700">|</span>
+            <span className="flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-amber-400" /> 会費 10,000円</span>
+          </div>
+        </div>
+
+        {/* ナビゲーションタブ: z-20 と relative を指定して最前面に配置し、クリック判定を確保 */}
+        <div className="relative z-20 border-t border-amber-500/20 bg-black/30 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-4 flex justify-around md:justify-center md:gap-8">
+            <button 
+              onClick={() => { setCurrentTab('rsvp'); setRsvpSuccess(null); }}
+              className={`py-4 px-6 text-sm font-medium tracking-wider border-b-2 transition-all flex items-center gap-2 relative z-30 cursor-pointer ${currentTab === 'rsvp' ? 'border-amber-400 text-amber-300' : 'border-transparent text-stone-300 hover:text-white'}`}
+            >
+              <Users className="w-4 h-4" />
+              <span>出欠登録</span>
+            </button>
+            <button 
+              onClick={() => { setCurrentTab('ticket'); }}
+              className={`py-4 px-6 text-sm font-medium tracking-wider border-b-2 transition-all flex items-center gap-2 relative z-30 cursor-pointer ${currentTab === 'ticket' ? 'border-amber-400 text-amber-300' : 'border-transparent text-stone-300 hover:text-white'}`}
+            >
+              <QrCode className="w-4 h-4" />
+              <span>マイチケット</span>
+            </button>
+            <button 
+              onClick={() => { setCurrentTab('admin'); }}
+              className={`py-4 px-6 text-sm font-medium tracking-wider border-b-2 transition-all flex items-center gap-2 relative z-30 cursor-pointer ${currentTab === 'admin' ? 'border-amber-400 text-amber-300' : 'border-transparent text-stone-300 hover:text-white'}`}
+            >
+              <Lock className="w-4 h-4" />
+              <span>管理者画面</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* メインコンテンツ */}
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        
+        {/* =======================================================
+            TAB 1: 出欠登録フォーム (RSVP Form)
+           ======================================================= */}
+        {currentTab === 'rsvp' && (
+          <div className="max-w-2xl mx-auto">
+            {/* 登録完了後の画面 */}
+            {rsvpSuccess ? (
+              <div className="bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden transform transition-all duration-300 animate-fadeIn">
+                <div className="bg-amber-50 py-6 px-6 text-center border-b border-amber-200">
+                  <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
+                  <h2 className="text-xl md:text-2xl font-serif font-bold text-stone-800">
+                    出欠登録の受領完了
+                  </h2>
+                  <p className="text-sm text-stone-600 mt-1">
+                    ご出席の登録が完了いたしました。
+                  </p>
                 </div>
-            `;
-            document.body.appendChild(alertBox);
-        }
+                
+                <div className="p-6 md:p-8 space-y-6">
+                  {/* 会費振込ご案内メール文（シミュレーション） */}
+                  <div className="bg-stone-50 rounded-xl p-5 border border-stone-200">
+                    <div className="flex items-center gap-2 text-stone-500 text-xs uppercase tracking-wider border-b pb-2 mb-3">
+                      <Mail className="w-4 h-4 text-red-700" />
+                      <span>ご案内メールの送付内容</span>
+                    </div>
+                    <div className="text-xs md:text-sm text-stone-700 space-y-3 font-serif leading-relaxed">
+                      <p>宛先: <strong>{rsvpSuccess.repEmail}</strong> 様</p>
+                      <hr className="border-stone-200 my-2" />
+                      <p className="font-bold text-center text-stone-900 border-y py-1 border-stone-200 bg-amber-50/50">
+                        【旭日中綬章お祝い会 会費事前振込のご案内】
+                      </p>
+                      <p>{rsvpSuccess.repName} 様</p>
+                      <p>
+                        この度は、旭日中綬章お祝い会へのご出席登録をいただき、誠にありがとうございます。
+                        {rsvpSuccess.companionCount > 0 && `同伴者様（${rsvpSuccess.companionCount}名）を含め、計${rsvpSuccess.companionCount + 1}名様のご出席を承りました。`}
+                      </p>
+                      <p>
+                        会費は事前振込にてお願いしております。
+                        お手数ですが、期日までにお振込をお願いいたします。
+                      </p>
+                      <div className="bg-white p-3 rounded border border-stone-300 text-xs md:text-sm font-mono my-2 space-y-1">
+                        <div>■会費合計：<span className="font-bold text-red-800">{(rsvpSuccess.companionCount + 1) * 10000} 円</span></div>
+                        <div>■振込期限：令和8年9月4日(金)</div>
+                        <div>■振込先：</div>
+                        <div className="pl-4">
+                          祝賀銀行（0001）寿支店（123）<br />
+                          普通預金 ７６５４３２１<br />
+                          口座名義：旭日中綬章受章祝賀会 代表
+                        </div>
+                      </div>
+                      <p className="text-stone-500 text-xs leading-normal font-sans">
+                        ※ご入金が確認でき次第、本システムより当日受付用「QRコード」を発行いたします。
+                        登録したメールアドレスにて「マイチケット」タブよりいつでもご確認いただけます。
+                      </p>
+                    </div>
+                  </div>
 
-        // デモ用サンプルデータの投入
-        function injectSampleData() {
-            const samples = [
-                {
-                    id: 'GST-DEMO001',
-                    name: '千代田 栄一',
-                    kana: 'チヨダ エイイチ',
-                    email: 'chiyoda@example.com',
-                    organization: '日本経済産業連合会 常任理事',
-                    message: 'この度はご受章、誠におめでとうございます。当日を楽しみにしております。',
-                    attendance: '出席',
-                    paid: true,
-                    checkedIn: false,
-                    createdAt: new Date().toLocaleString('ja-JP')
-                },
-                {
-                    id: 'GST-DEMO002',
-                    name: '霞が関 雅子',
-                    kana: 'カスミガセキ マサコ',
-                    email: 'kasumi@example.com',
-                    organization: '国際科学技術振興財団 代表理事',
-                    message: 'ご受章を心よりお祝い申し上げます。',
-                    attendance: '出席',
-                    paid: false,
-                    checkedIn: false,
-                    createdAt: new Date().toLocaleString('ja-JP')
-                },
-                {
-                    id: 'GST-DEMO003',
-                    name: '富士 桜子',
-                    kana: 'フジ サクラコ',
-                    email: 'fuji@example.com',
-                    organization: '〇〇大学 名誉教授',
-                    message: '当日はどうしても出張が入ってしまい、欠席させていただきます。盛会をお祈りしております。',
-                    attendance: '欠席',
-                    paid: false,
-                    checkedIn: false,
-                    createdAt: new Date().toLocaleString('ja-JP')
-                }
-            ];
+                  {/* 次のアクション案内 */}
+                  <div className="space-y-4">
+                    <h3 className="font-serif font-bold text-stone-800 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-500" /> 次にすること
+                    </h3>
+                    <ul className="text-xs md:text-sm text-stone-600 space-y-2 list-decimal list-inside">
+                      <li>上記の口座へ会費のお振込をお願いいたします。</li>
+                      <li>管理者による入金確認後、<strong>マイチケット</strong>にて受付用のQRコードが表示されます。</li>
+                      <li>当日は、スマートフォンでそのQRコードをご提示いただくか、印刷してお持ちください。</li>
+                    </ul>
+                  </div>
 
-            guests = [...guests, ...samples];
-            saveGuestsData();
-            renderAdminList();
-            showFloatToast("デモ用のサンプルデータを3件追加しました。");
-        }
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                    <button 
+                      onClick={() => {
+                        setSearchEmail(rsvpSuccess.repEmail);
+                        setCurrentTab('ticket');
+                        // 自動検索
+                        const matches = rsvps.filter(r => r.email === rsvpSuccess.repEmail.toLowerCase());
+                        setMyTickets(matches);
+                      }}
+                      className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-medium py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <QrCode className="w-5 h-5" />
+                      <span>マイチケットを確認する</span>
+                    </button>
+                    <button 
+                      onClick={() => setRsvpSuccess(null)}
+                      className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium py-3 px-4 rounded-xl border border-stone-300 transition-all text-center cursor-pointer"
+                    >
+                      新しい出欠を登録
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+                <div className="bg-stone-50 border-b border-stone-200 py-6 px-6 md:px-8">
+                  <h2 className="text-xl font-serif font-bold text-stone-800 flex items-center gap-2">
+                    <Users className="w-6 h-6 text-red-800" />
+                    <span>出欠登録（一括登録対応）</span>
+                  </h2>
+                  <p className="text-xs md:text-sm text-stone-500 mt-1">
+                    代表者様と同伴者様を一度にご登録いただけます。
+                  </p>
+                </div>
 
-        // 全データの消去
-        function clearAllData() {
-            if (confirm("登録されているすべてのデータを削除してもよろしいですか？（初期状態に戻ります）")) {
-                guests = [];
-                saveGuestsData();
-                renderAdminList();
-                showFloatToast("全データを削除しました。");
-            }
-        }
-    </script>
-</body>
-</html>
+                <form onSubmit={handleRSVPSubmit} className="p-6 md:p-8 space-y-6">
+                  {/* 代表者入力 */}
+                  <div className="space-y-4">
+                    <div className="border-l-4 border-red-800 pl-3">
+                      <h3 className="text-sm font-bold text-stone-800 tracking-wider">代表者情報</h3>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-600 uppercase mb-1">
+                        代表者お名前 <span className="text-red-600">*</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        required
+                        value={repName}
+                        onChange={(e) => setRepName(e.target.value)}
+                        placeholder="例：山田 太郎"
+                        className="w-full px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all text-stone-800"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-stone-600 uppercase mb-1">
+                          メールアドレス <span className="text-red-600">*</span>
+                        </label>
+                        <input 
+                          type="email" 
+                          required
+                          value={repEmail}
+                          onChange={(e) => setRepEmail(e.target.value)}
+                          placeholder="例：yamada@example.com"
+                          className="w-full px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all text-stone-800 text-sm"
+                        />
+                        <p className="text-[10px] text-stone-400 mt-1">※このアドレスに会費振込のご案内・QRコード確認リンクが紐付きます。</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-stone-600 uppercase mb-1">
+                          電話番号 <span className="text-red-600">*</span>
+                        </label>
+                        <input 
+                          type="tel" 
+                          required
+                          value={repPhone}
+                          onChange={(e) => setRepPhone(e.target.value)}
+                          placeholder="例：090-1234-5678"
+                          className="w-full px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all text-stone-800 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 同伴者入力（一括登録） */}
+                  <div className="space-y-4 pt-4 border-t border-stone-100">
+                    <div className="flex items-center justify-between">
+                      <div className="border-l-4 border-red-800 pl-3">
+                        <h3 className="text-sm font-bold text-stone-800 tracking-wider">同伴者登録</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddCompanion}
+                        className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 px-3 py-1.5 rounded-lg border border-amber-200 transition-all font-medium cursor-pointer"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>同伴者を追加</span>
+                      </button>
+                    </div>
+
+                    {companions.length === 0 ? (
+                      <p className="text-xs text-stone-400 bg-stone-50 p-4 rounded-xl text-center border border-dashed border-stone-200">
+                        同伴されるご家族やご友人等が一括して登録される場合は、「同伴者を追加」ボタンを押して氏名をご入力ください。
+                      </p>
+                    ) : (
+                      <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                        {companions.map((companion, idx) => (
+                          <div key={companion.id} className="flex items-center gap-2 bg-stone-50 p-3 rounded-xl border border-stone-200 animate-fadeIn">
+                            <span className="text-xs font-bold text-stone-500 w-16">同伴者 {idx + 1}</span>
+                            <input 
+                              type="text" 
+                              required
+                              value={companion.name}
+                              onChange={(e) => handleCompanionNameChange(companion.id, e.target.value)}
+                              placeholder="同伴者様のお名前"
+                              className="flex-1 px-3 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-amber-400 focus:border-amber-400 outline-none bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCompanion(companion.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-stone-200 transition-all cursor-pointer"
+                              title="削除"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 備考欄 */}
+                  <div className="space-y-2 pt-4 border-t border-stone-100">
+                    <label className="block text-xs font-bold text-stone-600 uppercase">
+                      備考欄（アレルギー、お座席、配慮が必要な事項等）
+                    </label>
+                    <textarea 
+                      rows="3"
+                      value={repNotes}
+                      onChange={(e) => setRepNotes(e.target.value)}
+                      placeholder="連絡事項や伝達事項がございましたらご記入ください。"
+                      className="w-full px-4 py-2 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all text-stone-800 text-sm"
+                    ></textarea>
+                  </div>
+
+                  {/* 送信ボタン */}
+                  <div className="pt-4">
+                    <button 
+                      type="submit"
+                      className="w-full bg-gradient-to-r from-red-800 to-rose-900 hover:from-red-900 hover:to-rose-950 text-white font-serif font-bold tracking-widest py-3.5 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 text-base cursor-pointer"
+                    >
+                      <CheckCircle className="w-5 h-5 text-amber-300" />
+                      <span>出席を登録する</span>
+                    </button>
+                    <p className="text-[10px] text-stone-400 text-center mt-3">
+                      ※送信後、ご記入 of メールアドレス宛てに事前振込の案内画面が表示されます。
+                    </p>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =======================================================
+            TAB 2: マイチケット (My Ticket / Guest Portal)
+           ======================================================= */}
+        {currentTab === 'ticket' && (
+          <div className="max-w-xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+              <div className="bg-stone-50 border-b border-stone-200 py-6 px-6">
+                <h2 className="text-xl font-serif font-bold text-stone-800 flex items-center gap-2">
+                  <QrCode className="w-6 h-6 text-red-800" />
+                  <span>マイチケット確認（QRコード表示）</span>
+                </h2>
+                <p className="text-xs md:text-sm text-stone-500 mt-1">
+                  登録したメールアドレスを入力して、受付用のQRチケットを表示します。
+                </p>
+              </div>
+
+              <div className="p-6 md:p-8 space-y-6">
+                {/* 検索フォーム */}
+                <form onSubmit={handleSearchTicket} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="email" 
+                      required
+                      value={searchEmail}
+                      onChange={(e) => setSearchEmail(e.target.value)}
+                      placeholder="登録したメールアドレス"
+                      className="w-full pl-9 pr-4 py-2.5 text-sm border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="bg-stone-800 hover:bg-stone-900 text-stone-100 px-5 rounded-xl transition-all font-bold text-sm flex items-center gap-1 cursor-pointer"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span>検索</span>
+                  </button>
+                </form>
+
+                {ticketSearchError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 text-center">
+                    {ticketSearchError}
+                  </div>
+                )}
+
+                {/* チケット一覧 */}
+                {myTickets.length > 0 && (
+                  <div className="space-y-6 pt-4 border-t border-stone-100 animate-fadeIn">
+                    <h3 className="text-sm font-bold text-stone-800">
+                      見つかったお申込み： <span className="text-red-800">{myTickets.length} 名様</span>
+                    </h3>
+
+                    {myTickets.map((ticket) => {
+                      const groupInfo = GROUP_COLORS.find(g => g.id === ticket.groupColor) || GROUP_COLORS[GROUP_COLORS.length - 1];
+                      return (
+                        <div key={ticket.id} className="border-2 border-dashed border-stone-300 rounded-2xl p-5 bg-stone-50 relative overflow-hidden">
+                          {/* お祝い透かし飾り */}
+                          <div className="absolute right-[-20px] top-[-20px] w-24 h-24 bg-red-800/5 rounded-full flex items-center justify-center pointer-events-none transform rotate-45 border-2 border-dashed border-red-800/10"></div>
+
+                          <div className="flex flex-col md:flex-row items-center gap-6">
+                            {/* QRコード表示エリア */}
+                            <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-stone-200 shadow-sm shrink-0">
+                              {ticket.isPaid ? (
+                                <>
+                                  <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
+                                    alt="QRコード"
+                                    className="w-36 h-36"
+                                  />
+                                  <span className="text-[10px] text-stone-400 mt-2 font-mono">ID: {ticket.id.slice(0, 8)}</span>
+                                </>
+                              ) : (
+                                <div className="w-36 h-36 flex flex-col items-center justify-center text-center p-3 bg-stone-50 border border-stone-200 rounded text-stone-400">
+                                  <Lock className="w-8 h-8 text-stone-300 mb-2" />
+                                  <span className="text-xs font-bold text-stone-600">振込確認後に表示</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* チケット詳細 */}
+                            <div className="flex-1 space-y-3 w-full text-center md:text-left">
+                              <div>
+                                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 border ${groupInfo.border} ${groupInfo.bg} ${groupInfo.text}`}>
+                                  {groupInfo.name}グループ
+                                </span>
+                                <h4 className="text-lg font-serif font-bold text-stone-800">
+                                  {ticket.name} 様
+                                </h4>
+                                <p className="text-xs text-stone-400">
+                                  {ticket.isRepresentative ? '代表者様' : '同伴者様'}
+                                </p>
+                              </div>
+
+                              <div className="text-xs space-y-1 text-stone-600">
+                                <p>■ 支払ステータス： 
+                                  {ticket.isPaid ? (
+                                    <span className="text-emerald-600 font-bold ml-1.5 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">入金済（QR有効）</span>
+                                  ) : (
+                                    <span className="text-red-600 font-bold ml-1.5 bg-red-50 px-2 py-0.5 rounded border border-red-200">未入金確認（お振込案内中）</span>
+                                  )}
+                                </p>
+                                <p>■ 当日受付：
+                                  {ticket.isPresent ? (
+                                    <span className="text-indigo-600 font-bold ml-1.5">出席済（ご来場済）</span>
+                                  ) : (
+                                    <span className="text-stone-500 ml-1.5">未受付（開場：12:30～）</span>
+                                  )}
+                                </p>
+                                {ticket.notes && (
+                                  <p className="text-stone-400 italic">※備考: {ticket.notes}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {!ticket.isPaid && (
+                            <div className="mt-4 pt-3 border-t border-stone-200 text-center text-xs text-stone-500 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100">
+                              会費10,000円のお支払い確認後、QRコードを自動表示いたします。
+                              口座情報は登録時メール案内（上部に記載）をご確認ください。
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =======================================================
+            TAB 3: 管理者画面 (Admin Dashboard & Scanner)
+           ======================================================= */}
+        {currentTab === 'admin' && (
+          <div className="space-y-6">
+            {!isAdminAuthenticated ? (
+              <div className="max-w-sm mx-auto bg-white rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+                <div className="bg-stone-800 py-4 px-6 text-amber-200 text-center font-serif">
+                  <Lock className="w-8 h-8 mx-auto mb-1 text-amber-300" />
+                  <h3 className="font-bold text-base tracking-wider">管理者用アクセス</h3>
+                </div>
+                <form onSubmit={handleAdminLogin} className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-600 mb-1">パスコードを入力</label>
+                    <input 
+                      type="password" 
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="パスコード（デモ用: 911）"
+                      className="w-full px-4 py-2 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none text-center"
+                    />
+                  </div>
+                  {adminError && (
+                    <p className="text-xs text-red-600 text-center">{adminError}</p>
+                  )}
+                  <button 
+                    type="submit"
+                    className="w-full bg-stone-800 hover:bg-stone-900 text-stone-100 font-bold py-2.5 px-4 rounded-xl shadow-md transition-all text-sm cursor-pointer"
+                  >
+                    ログイン
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div className="space-y-6 animate-fadeIn">
+                
+                {/* 管理ヘッダー / クイックステータス */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-md border border-stone-200">
+                  <div>
+                    <h2 className="text-lg md:text-xl font-serif font-bold text-stone-800 flex items-center gap-2">
+                      <span>祝賀会 管理システム</span>
+                      <span className="text-xs bg-red-100 text-red-800 font-sans px-2 py-0.5 rounded border border-red-300">ADMIN</span>
+                    </h2>
+                    <p className="text-xs text-stone-500 mt-1">
+                      出欠確認、お支払い管理、グループ色分け、当日受付スキャナー
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={startScanner}
+                      className="flex-1 md:flex-none bg-red-800 hover:bg-red-900 text-white text-xs md:text-sm px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>当日受付スキャン起動</span>
+                    </button>
+                    <button 
+                      onClick={() => setIsAdminAuthenticated(false)}
+                      className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-xl transition-all border border-stone-200 cursor-pointer"
+                      title="ログアウト"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 集計インジケータ */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-stone-400 font-bold uppercase">登録総数</div>
+                      <div className="text-xl font-serif font-bold text-stone-800">{rsvps.length} <span className="text-xs font-sans font-normal text-stone-500">名</span></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-stone-400 font-bold uppercase">入金確認済</div>
+                      <div className="text-xl font-serif font-bold text-stone-800">
+                        {rsvps.filter(r => r.isPaid).length} <span className="text-xs font-sans font-normal text-stone-500">名</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-stone-400 font-bold uppercase">本日出席</div>
+                      <div className="text-xl font-serif font-bold text-stone-800">
+                        {rsvps.filter(r => r.isPresent).length} <span className="text-xs font-sans font-normal text-stone-500">名</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-stone-400 font-bold uppercase">見込総会費</div>
+                      <div className="text-xl font-serif font-bold text-stone-800">{(rsvps.length * 10000).toLocaleString()} <span className="text-xs font-sans font-normal text-stone-500">円</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ==========================================
+                    QRスキャナーカメラUI (モーダル風)
+                   ========================================== */}
+                {activeScanner && (
+                  <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+                    <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative">
+                      <div className="bg-red-900 text-white p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Camera className="w-5 h-5 text-amber-400" />
+                          <h3 className="font-serif font-bold">当日受付用QRスキャナー</h3>
+                        </div>
+                        <button 
+                          onClick={stopScanner}
+                          className="text-stone-200 hover:text-white bg-black/20 hover:bg-black/30 w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="p-6 space-y-4">
+                        {/* ビデオカメラ枠 */}
+                        <div className="relative border-4 border-amber-400/50 rounded-xl overflow-hidden bg-stone-900 aspect-square">
+                          <div id="qr-reader" className="w-full h-full"></div>
+                          {/* スキャン枠のアニメーション */}
+                          <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse pointer-events-none"></div>
+                        </div>
+
+                        {/* カメラが使えない環境・デモ用の手動入力 */}
+                        <div className="bg-stone-50 p-3 rounded-lg border border-stone-200 text-xs">
+                          <p className="font-bold text-stone-700 mb-2 text-center">【デモ用・手動スキャンシミュレータ】</p>
+                          <div className="flex gap-1">
+                            <input 
+                              type="text" 
+                              id="manual-id"
+                              placeholder="招待者IDを入力" 
+                              className="flex-1 px-3 py-1.5 border border-stone-300 rounded focus:outline-none"
+                            />
+                            <button 
+                              onClick={async () => {
+                                const el = document.getElementById('manual-id');
+                                if (el && el.value.trim()) {
+                                  await processCheckIn(el.value.trim());
+                                  el.value = '';
+                                }
+                              }}
+                              className="bg-stone-700 hover:bg-stone-800 text-white px-3 py-1.5 rounded cursor-pointer"
+                            >
+                              手動チェックイン
+                            </button>
+                          </div>
+                          
+                          {/* 登録済みリストからの簡単テスト */}
+                          <div className="mt-2 pt-2 border-t border-stone-200">
+                            <p className="text-[10px] text-stone-400 mb-1">登録済みゲストから選択してスキャンを模倣：</p>
+                            <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                              {rsvps.map(r => (
+                                <button 
+                                  key={r.id}
+                                  onClick={() => processCheckIn(r.id)}
+                                  className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded text-[10px] cursor-pointer"
+                                >
+                                  {r.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* フィードバック表示 */}
+                        {scannerFeedback.message && (
+                          <div className={`p-4 rounded-xl border text-center text-sm font-medium ${
+                            scannerFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                            scannerFeedback.type === 'warning' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                            'bg-red-50 text-red-800 border-red-200'
+                          }`}>
+                            {scannerFeedback.message}
+                          </div>
+                        )}
+
+                        <button 
+                          onClick={stopScanner}
+                          className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-2 rounded-xl border border-stone-300 transition-all font-bold text-xs cursor-pointer"
+                        >
+                          スキャナーを閉じる
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 招待客リスト・編集機能 */}
+                <div className="bg-white rounded-2xl shadow-md border border-stone-200 overflow-hidden">
+                  <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="font-serif font-bold text-stone-800">
+                      出席者リスト管理・色分け
+                    </h3>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input 
+                        type="text" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="名前、メールアドレスで検索..."
+                        className="w-full pl-9 pr-4 py-1.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* モバイル用カードリスト & PC用テーブルのレスポンシブ切り替え */}
+                  <div className="block lg:hidden">
+                    {/* モバイル表示 */}
+                    {loading ? (
+                      <div className="p-8 text-center text-stone-500">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                        読み込み中...
+                      </div>
+                    ) : rsvps.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.email.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                      <div className="p-8 text-center text-stone-400 text-sm">
+                        該当するデータが見つかりません。
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-stone-100">
+                        {rsvps
+                          .filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                          .map((rsvp) => {
+                            const groupColorInfo = GROUP_COLORS.find(g => g.id === rsvp.groupColor) || GROUP_COLORS[GROUP_COLORS.length - 1];
+                            return (
+                              <div key={rsvp.id} className="p-4 space-y-4 bg-white hover:bg-stone-50/50">
+                                <div className="flex items-start justify-between">
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <h4 className="font-serif font-bold text-stone-800">{rsvp.name}</h4>
+                                      <span className="text-[10px] text-stone-400">({rsvp.isRepresentative ? '代表' : '同伴'})</span>
+                                    </div>
+                                    <p className="text-xs text-stone-400">{rsvp.email}</p>
+                                    <p className="text-[10px] text-stone-300 font-mono">ID: {rsvp.id.slice(0, 8)}</p>
+                                  </div>
+                                  
+                                  {/* 入金＆受付ステータス（クリックでトグル） */}
+                                  <div className="flex flex-col items-end gap-1.5">
+                                    <button 
+                                      onClick={() => handleTogglePayment(rsvp.id, rsvp.isPaid)}
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded border cursor-pointer ${rsvp.isPaid ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}
+                                    >
+                                      {rsvp.isPaid ? '入金済' : '未入金'}
+                                    </button>
+                                    <button 
+                                      onClick={() => handleTogglePresence(rsvp.id, rsvp.isPresent)}
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded border cursor-pointer ${rsvp.isPresent ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-stone-100 border-stone-300 text-stone-500'}`}
+                                    >
+                                      {rsvp.isPresent ? '出席済' : '未出席'}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 色分け（グループ） */}
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className="text-[10px] text-stone-500 mr-1.5">席種:</span>
+                                  {GROUP_COLORS.map(color => (
+                                    <button
+                                      key={color.id}
+                                      onClick={() => handleChangeGroupColor(rsvp.id, color.id)}
+                                      className={`w-4 h-4 rounded-full border shadow-sm flex items-center justify-center transition-all cursor-pointer ${color.id === rsvp.groupColor ? 'scale-125 ring-2 ring-offset-1 ring-stone-400' : 'opacity-60'}`}
+                                      style={{ backgroundColor: color.hex }}
+                                      title={color.name}
+                                    />
+                                  ))}
+                                  <span className="text-[10px] font-bold text-stone-600 ml-1">
+                                    {groupColorInfo.name}
+                                  </span>
+                                </div>
+
+                                {/* 備考編集 */}
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="text"
+                                    value={editingNotes[rsvp.id] !== undefined ? editingNotes[rsvp.id] : (rsvp.notes || '')}
+                                    onChange={(e) => handleNotesChange(rsvp.id, e.target.value)}
+                                    placeholder="備考・メモを入力"
+                                    className="flex-1 px-2.5 py-1 text-xs border border-stone-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-400 bg-stone-50/50"
+                                  />
+                                  <button
+                                    onClick={() => handleSaveNotes(rsvp.id)}
+                                    className="bg-stone-700 hover:bg-stone-800 text-white text-xs px-2.5 py-1 rounded transition-all shrink-0 cursor-pointer"
+                                  >
+                                    保存
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteRsvp(rsvp.id)}
+                                    className="text-stone-300 hover:text-red-600 p-1 rounded shrink-0 cursor-pointer"
+                                    title="データ削除"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PC表示用テーブル */}
+                  <div className="hidden lg:block overflow-x-auto">
+                    <table className="w-full text-left text-xs text-stone-700 border-collapse">
+                      <thead>
+                        <tr className="bg-stone-100 border-b border-stone-200 text-stone-600 uppercase font-bold tracking-wider">
+                          <th className="py-3 px-4">お名前（区分）</th>
+                          <th className="py-3 px-4">メールアドレス</th>
+                          <th className="py-3 px-4">グループ設定 (色分け)</th>
+                          <th className="py-3 px-4 text-center">支払い（会費）</th>
+                          <th className="py-3 px-4 text-center">当日出席（受付）</th>
+                          <th className="py-3 px-4">備考・メモ</th>
+                          <th className="py-3 px-4 text-center">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100">
+                        {loading ? (
+                          <tr>
+                            <td colSpan="7" className="py-8 text-center text-stone-500">
+                              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                              読み込み中...
+                            </td>
+                          </tr>
+                        ) : rsvps.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.email.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="py-8 text-center text-stone-400">
+                              該当する出席者が見つかりません。
+                            </td>
+                          </tr>
+                        ) : (
+                          rsvps
+                            .filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((rsvp) => {
+                              const groupColorInfo = GROUP_COLORS.find(g => g.id === rsvp.groupColor) || GROUP_COLORS[GROUP_COLORS.length - 1];
+                              return (
+                                <tr key={rsvp.id} className="hover:bg-stone-50 transition-colors">
+                                  {/* お名前 */}
+                                  <td className="py-3 px-4 font-medium text-stone-900">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-serif font-bold text-sm">{rsvp.name}</span>
+                                      <span className={`px-1.5 py-0.5 text-[9px] rounded-full ${rsvp.isRepresentative ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-600'}`}>
+                                        {rsvp.isRepresentative ? '代表者' : '同伴者'}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] text-stone-400 font-mono block mt-0.5">ID: {rsvp.id.slice(0, 8)}</span>
+                                  </td>
+                                  
+                                  {/* メールアドレス */}
+                                  <td className="py-3 px-4 text-stone-600 font-mono">
+                                    {rsvp.email}
+                                  </td>
+
+                                  {/* グループ（色分け） */}
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex gap-1.5">
+                                        {GROUP_COLORS.map(color => (
+                                          <button
+                                            key={color.id}
+                                            onClick={() => handleChangeGroupColor(rsvp.id, color.id)}
+                                            className={`w-4 h-4 rounded-full border shadow-inner flex items-center justify-center transition-all cursor-pointer ${color.id === rsvp.groupColor ? 'scale-125 ring-2 ring-offset-1 ring-stone-400 z-10' : 'opacity-40 hover:opacity-80'}`}
+                                            style={{ backgroundColor: color.hex }}
+                                            title={color.name}
+                                          />
+                                        ))}
+                                      </div>
+                                      <span className={`font-bold ml-1.5 text-[10px] px-2 py-0.5 rounded border ${groupColorInfo.border} ${groupColorInfo.bg} ${groupColorInfo.text}`}>
+                                        {groupColorInfo.name}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* お支払い */}
+                                  <td className="py-3 px-4 text-center">
+                                    <button
+                                      onClick={() => handleTogglePayment(rsvp.id, rsvp.isPaid)}
+                                      className={`px-3 py-1 rounded-full font-bold transition-all text-[10px] border cursor-pointer ${
+                                        rsvp.isPaid 
+                                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100/60' 
+                                          : 'bg-red-50 border-red-300 text-red-800 hover:bg-red-100/60'
+                                      }`}
+                                    >
+                                      {rsvp.isPaid ? '領収済' : '未入金'}
+                                    </button>
+                                  </td>
+
+                                  {/* 当日出席 */}
+                                  <td className="py-3 px-4 text-center">
+                                    <button
+                                      onClick={() => handleTogglePresence(rsvp.id, rsvp.isPresent)}
+                                      className={`px-3 py-1 rounded-full font-bold transition-all text-[10px] border cursor-pointer ${
+                                        rsvp.isPresent 
+                                          ? 'bg-indigo-50 border-indigo-300 text-indigo-800 hover:bg-indigo-100/60' 
+                                          : 'bg-stone-50 border-stone-300 text-stone-500 hover:bg-stone-100'
+                                      }`}
+                                    >
+                                      {rsvp.isPresent ? '出席済' : '未出席'}
+                                    </button>
+                                  </td>
+
+                                  {/* 備考・メモ */}
+                                  <td className="py-3 px-4 max-w-xs">
+                                    <div className="flex gap-1">
+                                      <input 
+                                        type="text" 
+                                        value={editingNotes[rsvp.id] !== undefined ? editingNotes[rsvp.id] : (rsvp.notes || '')}
+                                        onChange={(e) => handleNotesChange(rsvp.id, e.target.value)}
+                                        placeholder="備考を入力..."
+                                        className="flex-1 px-2 py-1 border border-stone-200 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                      />
+                                      <button 
+                                        onClick={() => handleSaveNotes(rsvp.id)}
+                                        className="bg-stone-700 hover:bg-stone-800 text-white px-2 py-1 rounded transition-all text-[10px] font-bold cursor-pointer"
+                                      >
+                                        保存
+                                      </button>
+                                    </div>
+                                  </td>
+
+                                  {/* 操作（削除） */}
+                                  <td className="py-3 px-4 text-center">
+                                    <button
+                                      onClick={() => handleDeleteRsvp(rsvp.id)}
+                                      className="text-stone-300 hover:text-red-600 p-1.5 rounded transition-all cursor-pointer"
+                                      title="この登録を削除"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* フッター */}
+      <footer className="mt-12 bg-stone-900 text-stone-400 py-8 border-t border-amber-500/10">
+        <div className="max-w-6xl mx-auto px-4 text-center space-y-4 text-xs md:text-sm">
+          <p className="font-serif text-stone-300">
+            旭日中綬章 受章お祝い会 事務局
+          </p>
+          <div className="text-stone-500 space-y-1">
+            <p>本システムは、招待客の出欠管理および安全でスムーズな来場受付を実現するためのデプロイメントシステムです。</p>
+            <p>&copy; 2026 Celebration App System. All Rights Reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}

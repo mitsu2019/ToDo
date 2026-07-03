@@ -429,7 +429,18 @@ function switchView(view) {
             return; // 管理画面へは移動させない
         }
     }
-    
+     // 1. すべての画面要素を取得して非表示にする
+  // (HTML側で各画面に "view-content" というクラスがついている前提です)
+  const views = document.querySelectorAll('.view-content');
+  views.forEach(v => {
+    v.style.display = 'none';
+  });
+
+  // 2. 選択された ID (admin など) の画面だけを表示する
+  const targetView = document.getElementById(view);
+  if (targetView) {
+    targetView.style.display = 'block';
+      
     document.getElementById('view-guest').classList.toggle('hidden', view !== 'guest');
     document.getElementById('view-admin').classList.toggle('hidden', view !== 'admin');
     

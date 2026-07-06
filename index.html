@@ -3,571 +3,1122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>旭日中授章お祝い会 受付管理システム (Firebase版)</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- QRCode.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- html5-qrcode -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <title>旭日中綬章受章祝賀会 Reception System v2.0</title>
     
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Sans+Serif&display=swap');
-        .font-serif-jp { font-family: 'Noto Serif JP', serif; }
-        .bg-gold-gradient { background: linear-gradient(135deg, #b89742 0%, #dfc475 50%, #b89742 100%); }
-        .text-gold { color: #b89742; }
-        
-        /* 印刷時専用のスタイル調整 */
-        @media print {
-            body { background-color: white !important; }
-            @page { size: A4 portrait; margin: 15mm; }
-            .no-print { display: none !important; }
+    <!-- 外部ライブラリ (Tailwind CSS, グラフ, QR, Excel, アイコン) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        burgundy: '#7A1F3D',
+                        gold: '#C5A059',
+                        ivory: '#FFFDF0',
+                        charcoal: '#333333',
+                    },
+                    fontFamily: {
+                        sans: ['Noto Sans JP', 'sans-serif'],
+                        serif: ['Noto Serif JP', 'serif'],
+                    }
+                }
+            }
         }
+    </script>
+    <style>
+        body { background-color: #FFFDF0; color: #333333; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* QRリーダーのカメラビュー用調整 */
+        #qr-reader { width: 100%; max-width: 500px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 2px solid #C5A059; }
+        #qr-reader img { display: none; } /* html5-qrcodeのロゴ隠し */
+        /* テーブルのスクロール対応 */
+        .table-container { overflow-x: auto; }
+        .modern-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .modern-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .modern-scrollbar::-webkit-scrollbar-thumb { background: #C5A059; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen font-sans">
+<body class="font-sans min-h-screen flex flex-col">
 
-    <!-- ============================================== -->
-    <!-- アプリケーション画面 (印刷時は非表示になります) -->
-    <!-- ============================================== -->
-    <div id="app-content" class="print:hidden flex flex-col min-h-screen">
-        
-        <!-- ヘッダー -->
-        <header class="bg-slate-900 text-white shadow-md border-b-4 border-[#b89742]">
-            <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center text-slate-900 font-bold text-xl shadow">祝</div>
+    <!-- 全体ローディング -->
+    <div id="global-loading" class="fixed inset-0 bg-ivory z-50 flex flex-col items-center justify-center transition-opacity duration-500">
+        <i class="fas fa-circle-notch fa-spin text-6xl text-gold mb-4"></i>
+        <h2 class="text-2xl font-serif text-burgundy">システムを起動しています...</h2>
+    </div>
+
+    <!-- ヘッダー -->
+    <header class="bg-burgundy text-ivory shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-serif font-bold tracking-wider">
+                <i class="fas fa-award text-gold mr-2"></i>旭日中綬章受章祝賀会
+            </h1>
+            <!-- ナビゲーション -->
+            <nav class="hidden md:flex space-x-1">
+                <button data-target="guest-view" class="nav-btn px-4 py-2 rounded-t-lg bg-white/10 hover:bg-white/20 transition active font-medium">Guest</button>
+                <button data-target="admin-view" class="nav-btn px-4 py-2 rounded-t-lg hover:bg-white/10 transition font-medium">Admin</button>
+                <button data-target="reception-view" class="nav-btn px-4 py-2 rounded-t-lg hover:bg-white/10 transition font-medium">Reception</button>
+                <button data-target="monitor-view" class="nav-btn px-4 py-2 rounded-t-lg hover:bg-white/10 transition font-medium">Monitor</button>
+            </nav>
+            <!-- モバイルメニューボタン -->
+            <button id="mobile-menu-btn" class="md:hidden text-gold text-2xl">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <!-- モバイルナビゲーション -->
+        <div id="mobile-nav" class="hidden md:hidden bg-burgundy/95 pb-2 px-2">
+            <button data-target="guest-view" class="nav-btn block w-full text-left px-4 py-2 text-ivory hover:bg-white/10 active">Guest (参加者)</button>
+            <button data-target="admin-view" class="nav-btn block w-full text-left px-4 py-2 text-ivory hover:bg-white/10">Admin (管理者)</button>
+            <button data-target="reception-view" class="nav-btn block w-full text-left px-4 py-2 text-ivory hover:bg-white/10">Reception (受付)</button>
+            <button data-target="monitor-view" class="nav-btn block w-full text-left px-4 py-2 text-ivory hover:bg-white/10">Monitor (モニター)</button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-grow container mx-auto px-4 py-6">
+
+        <!-- ==================== GUEST VIEW ==================== -->
+        <section id="guest-view" class="tab-content active">
+            <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8 border-t-4 border-gold">
+                <h2 class="text-3xl font-serif text-center text-burgundy mb-6 border-b pb-4">参加お申し込み</h2>
+                
+                <div id="guest-registration-form-container">
+                    <form id="guest-form" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-charcoal mb-1">氏名 <span class="text-red-500">*</span></label>
+                                <input type="text" id="g-name" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-charcoal mb-1">フリガナ <span class="text-red-500">*</span></label>
+                                <input type="text" id="g-kana" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-charcoal mb-1">メールアドレス <span class="text-red-500">*</span></label>
+                            <input type="email" id="g-email" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-charcoal mb-1">会社・団体名</label>
+                                <input type="text" id="g-organization" class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-charcoal mb-1">役職</label>
+                                <input type="text" id="g-position" class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-charcoal mb-1">来賓区分 <span class="text-red-500">*</span></label>
+                            <select id="g-guestType" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-gold focus:border-gold">
+                                <option value="日本給食サービス協会">日本給食サービス協会</option>
+                                <option value="PS会">PS会</option>
+                                <option value="来賓・行政">来賓・行政</option>
+                                <option value="金融機関">金融機関</option>
+                                <option value="その他">その他</option>
+                            </select>
+                        </div>
+                        <div class="pt-4 text-center">
+                            <button type="submit" class="bg-burgundy text-white px-8 py-3 rounded-full font-bold shadow-md hover:bg-opacity-90 transition transform hover:-translate-y-1">
+                                申し込む
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="guest-ticket-container" class="hidden text-center">
+                    <div class="bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 mb-6">
+                        <i class="fas fa-check-circle text-2xl mb-2"></i>
+                        <p class="font-bold">お申し込みが完了しました</p>
+                        <p class="text-sm">当日は以下のQRコードを受付にご提示ください。</p>
+                    </div>
+                    
+                    <div class="inline-block p-4 bg-white border-2 border-gold rounded-xl shadow-sm mb-4">
+                        <h3 class="font-serif text-xl mb-4 text-burgundy" id="ticket-name">氏名様</h3>
+                        <div id="qrcode" class="mx-auto flex justify-center mb-4"></div>
+                        <p class="text-xs text-gray-500 break-all" id="ticket-uuid"></p>
+                    </div>
+                    
                     <div>
-                        <h1 class="text-lg md:text-xl font-bold tracking-wider font-serif-jp text-[#dfc475]">旭日中授章 受章お祝い会</h1>
-                        <p class="text-xs text-slate-400">出欠登録 ＆ 当日受付スマートシステム</p>
-                    </div>
-                </div>
-                
-                <!-- タブ切り替え -->
-                <div class="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full md:w-auto">
-                    <button id="btn-tab-guest" class="flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 bg-gold-gradient text-slate-950 shadow">
-                        <i class="fa-solid fa-user-pen"></i> ゲスト用
-                    </button>
-                    <button id="btn-tab-admin" class="flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 text-slate-400 hover:text-white">
-                        <i class="fa-solid fa-user-shield"></i> 主催者用
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <!-- メインコンテンツ -->
-        <main class="flex-grow max-w-6xl w-full mx-auto p-4 space-y-6">
-
-            <!-- 【システム状態表示】 -->
-            <div id="auth-status-container" class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Firebase接続および認証を確認中...</span>
-            </div>
-
-            <!-- ============================================== -->
-            <!-- 1. ゲスト用ビュー -->
-            <!-- ============================================== -->
-            <div id="view-guest" class="space-y-6">
-                
-                <!-- 確認・領収書発行エリア -->
-                <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-                    <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <i class="fa-solid fa-magnifying-glass text-[#b89742]"></i> 登録内容の確認・受付票(領収書)発行
-                    </h3>
-                    <p class="text-sm text-slate-600 mb-4">登録済みのメールアドレスを入力してください。振込が確認できている場合、受付票兼領収書を発行・表示できます。</p>
-                    <div class="flex flex-col sm:flex-row gap-2 max-w-md">
-                        <input type="email" id="search-guest-email" placeholder="メールアドレスを入力" class="flex-grow px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b89742]">
-                        <button id="btn-search-guest" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
-                            確認する <i class="fa-solid fa-arrow-right"></i>
+                        <button onclick="window.print()" class="bg-gray-800 text-white px-6 py-2 rounded-full font-bold shadow hover:bg-gray-700 transition">
+                            <i class="fas fa-print mr-2"></i>受付票を印刷する
                         </button>
+                        <button id="btn-new-registration" class="mt-4 text-burgundy underline block w-full text-sm">別の方を登録する</button>
                     </div>
-                    <div id="guest-status-result" class="mt-4 hidden p-5 rounded-lg border"></div>
                 </div>
+            </div>
+        </section>
 
-                <!-- 登録フォーム -->
-                <div id="form-container" class="bg-white rounded-xl p-6 md:p-8 shadow-sm border border-slate-200">
-                    <h3 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 border-b pb-3 border-slate-100">
-                        <i class="fa-solid fa-pen-to-square text-[#b89742]"></i> 新規出欠回答フォーム
-                    </h3>
-                    <form id="attendance-form" class="space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">ご出欠 <span class="text-red-500">*</span></label>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <label class="flex items-center justify-center p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all [&:has(input:checked)]:border-[#b89742] [&:has(input:checked)]:bg-amber-50/50">
-                                        <input type="radio" name="attendance" value="出席" required class="sr-only" checked>
-                                        <span class="text-base font-bold flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-500"></i> ご出席</span>
-                                    </label>
-                                    <label class="flex items-center justify-center p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all [&:has(input:checked)]:border-slate-400 [&:has(input:checked)]:bg-slate-100">
-                                        <input type="radio" name="attendance" value="欠席" class="sr-only">
-                                        <span class="text-base font-bold text-slate-500 flex items-center gap-2"><i class="fa-solid fa-circle-xmark text-rose-500"></i> ご欠席</span>
-                                    </label>
+        <!-- ==================== ADMIN VIEW ==================== -->
+        <section id="admin-view" class="tab-content">
+            <div class="flex flex-col md:flex-row gap-6">
+                <!-- Admin Sidebar -->
+                <aside class="w-full md:w-64 bg-white rounded-xl shadow p-4 border border-gray-200 h-fit">
+                    <h3 class="font-bold text-lg mb-4 text-charcoal border-b pb-2">管理メニュー</h3>
+                    <ul class="space-y-2">
+                        <li><button data-admintab="admin-dashboard" class="admin-tab-btn w-full text-left px-3 py-2 rounded bg-gold/20 text-burgundy font-bold"><i class="fas fa-chart-pie w-6"></i> Dashboard</button></li>
+                        <li><button data-admintab="admin-guests" class="admin-tab-btn w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-charcoal"><i class="fas fa-users w-6"></i> Guests</button></li>
+                        <li><button data-admintab="admin-settings" class="admin-tab-btn w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-charcoal"><i class="fas fa-cog w-6"></i> Settings</button></li>
+                    </ul>
+                </aside>
+
+                <!-- Admin Main -->
+                <div class="flex-grow bg-white rounded-xl shadow p-6 border border-gray-200">
+                    
+                    <!-- Dashboard Sub-view -->
+                    <div id="admin-dashboard" class="admin-content active">
+                        <h2 class="text-2xl font-serif mb-6 text-burgundy border-l-4 border-gold pl-3">Dashboard</h2>
+                        
+                        <!-- KPIs -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-sm text-center">
+                                <p class="text-sm text-gray-500">登録人数</p>
+                                <p class="text-3xl font-bold text-charcoal" id="kpi-total">0</p>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 shadow-sm text-center">
+                                <p class="text-sm text-blue-600">出席予定</p>
+                                <p class="text-3xl font-bold text-blue-700" id="kpi-attending">0</p>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg border border-green-100 shadow-sm text-center">
+                                <p class="text-sm text-green-600">受付済</p>
+                                <p class="text-3xl font-bold text-green-700" id="kpi-checked-in">0</p>
+                            </div>
+                            <div class="bg-red-50 p-4 rounded-lg border border-red-100 shadow-sm text-center">
+                                <p class="text-sm text-red-600">未受付</p>
+                                <p class="text-3xl font-bold text-red-700" id="kpi-waiting">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Charts -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <h4 class="text-center font-bold mb-2 text-gray-600">受付状況</h4>
+                                <div class="w-full max-w-xs mx-auto">
+                                    <canvas id="checkinChart"></canvas>
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1">お名前 <span class="text-red-500">*</span></label>
-                                <input type="text" id="input-name" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#b89742]">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1">フリガナ <span class="text-red-500">*</span></label>
-                                <input type="text" id="input-kana" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#b89742]">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1">メールアドレス <span class="text-red-500">*</span></label>
-                                <input type="email" id="input-email" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#b89742]">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1">御社名・御役職など</label>
-                                <input type="text" id="input-organization" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#b89742]">
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-bold text-slate-700 mb-1">お祝いメッセージ</label>
-                                <textarea id="input-message" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#b89742]"></textarea>
+                                <h4 class="text-center font-bold mb-2 text-gray-600">来賓区分比率</h4>
+                                <div class="w-full max-w-xs mx-auto">
+                                    <canvas id="typeChart"></canvas>
+                                </div>
                             </div>
                         </div>
-                        <button type="submit" class="w-full bg-gold-gradient hover:opacity-90 text-slate-950 font-bold text-lg py-3 rounded-xl shadow-md transition-all">
-                            送信する <i class="fa-solid fa-paper-plane ml-1"></i>
+                    </div>
+
+                    <!-- Guests Sub-view -->
+                    <div id="admin-guests" class="admin-content hidden">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <h2 class="text-2xl font-serif text-burgundy border-l-4 border-gold pl-3">Guest List</h2>
+                            <div class="flex gap-2">
+                                <div class="relative">
+                                    <input type="text" id="guest-search" placeholder="氏名, 会社名で検索..." class="pl-8 pr-4 py-2 border rounded-full text-sm focus:ring-gold focus:border-gold">
+                                    <i class="fas fa-search absolute left-3 top-2.5 text-gray-400"></i>
+                                </div>
+                                <button id="btn-export-csv" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition">
+                                    <i class="fas fa-file-excel mr-1"></i> CSV出力
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container modern-scrollbar">
+                            <table class="w-full min-w-max text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100 text-gray-700 text-sm border-b-2 border-gold">
+                                        <th class="p-3">氏名</th>
+                                        <th class="p-3">会社・団体</th>
+                                        <th class="p-3">区分</th>
+                                        <th class="p-3">受付状況</th>
+                                        <th class="p-3">受付時間</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="guest-table-body" class="text-sm divide-y divide-gray-200">
+                                    <!-- JSで動的に行を生成 -->
+                                </tbody>
+                            </table>
+                            <div id="no-guests-msg" class="text-center text-gray-500 py-8 hidden">
+                                登録データがありません
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Settings Sub-view (簡易モック) -->
+                    <div id="admin-settings" class="admin-content hidden">
+                        <h2 class="text-2xl font-serif mb-6 text-burgundy border-l-4 border-gold pl-3">Settings</h2>
+                        <div class="bg-yellow-50 p-4 rounded border border-yellow-200 text-yellow-800 text-sm mb-4">
+                            <i class="fas fa-info-circle mr-1"></i> システム設定はプレビュー版では読み取り専用です。
+                        </div>
+                        <div class="space-y-4 max-w-md">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">イベント名</label>
+                                <input type="text" value="旭日中綬章受章祝賀会" readonly class="mt-1 block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm p-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">テーマカラー設定</label>
+                                <div class="flex gap-2 mt-1">
+                                    <div class="w-8 h-8 rounded-full bg-burgundy shadow" title="Burgundy"></div>
+                                    <div class="w-8 h-8 rounded-full bg-gold shadow" title="Gold"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== RECEPTION VIEW ==================== -->
+        <section id="reception-view" class="tab-content">
+            <div class="max-w-3xl mx-auto">
+                <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-gold mb-6 text-center">
+                    <h2 class="text-3xl font-serif text-burgundy mb-2">QR受付</h2>
+                    <p class="text-gray-600 mb-6">参加者のQRコードをカメラにかざしてください</p>
+                    
+                    <div id="qr-reader-container" class="relative">
+                        <!-- html5-qrcode がマウントされる場所 -->
+                        <div id="qr-reader"></div>
+                        <div id="qr-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center z-10 hidden">
+                            <i class="fas fa-spinner fa-spin text-4xl text-gold"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button id="btn-start-scanner" class="bg-burgundy text-white px-6 py-2 rounded shadow hover:bg-opacity-90">
+                            <i class="fas fa-camera mr-2"></i>カメラスキャン開始
                         </button>
-                    </form>
+                        <button id="btn-stop-scanner" class="bg-gray-500 text-white px-6 py-2 rounded shadow hover:bg-gray-600 hidden">
+                            スキャン停止
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 読取結果表示エリア -->
+                <div id="reception-result" class="hidden bg-white rounded-xl shadow-lg p-6 text-center transform transition duration-300 scale-95 opacity-0">
+                    <!-- JSで内容を書き換える -->
                 </div>
             </div>
+        </section>
 
-            <!-- ============================================== -->
-            <!-- 2. 主催者用管理画面ビュー -->
-            <!-- ============================================== -->
-            <div id="view-admin" class="space-y-6 hidden">
-                <!-- ダッシュボード -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                        <p class="text-xs text-slate-500 font-bold">登録総数</p>
-                        <h4 id="stat-total" class="text-2xl font-bold text-slate-800">0 名</h4>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                        <p class="text-xs text-slate-500 font-bold">出席予定</p>
-                        <h4 id="stat-attending" class="text-2xl font-bold text-emerald-600">0 名</h4>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                        <p class="text-xs text-slate-500 font-bold">振込確認済</p>
-                        <h4 id="stat-paid" class="text-2xl font-bold text-blue-600">0 名</h4>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                        <p class="text-xs text-slate-500 font-bold">来場済</p>
-                        <h4 id="stat-checkedin" class="text-2xl font-bold text-indigo-600">0 名</h4>
-                    </div>
+        <!-- ==================== MONITOR VIEW ==================== -->
+        <section id="monitor-view" class="tab-content">
+            <div class="bg-charcoal text-ivory rounded-xl shadow-2xl p-8 min-h-[70vh] flex flex-col justify-between border-4 border-gold relative overflow-hidden">
+                <!-- 背景装飾 -->
+                <div class="absolute top-0 right-0 opacity-10 text-[200px] pointer-events-none -mt-10 -mr-10">
+                    <i class="fas fa-award"></i>
                 </div>
 
-                <!-- QRコードスキャナー -->
-                <div class="bg-slate-900 text-white rounded-xl p-6 shadow-md border border-[#b89742]/50">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-[#dfc475]"><i class="fa-solid fa-qrcode"></i> 当日受付スキャン</h3>
-                        <div>
-                            <button id="btn-start-scanner" class="bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fa-solid fa-camera"></i> 起動</button>
-                            <button id="btn-stop-scanner" class="bg-rose-600 px-4 py-2 rounded-lg text-sm font-bold hidden"><i class="fa-solid fa-video-slash"></i> 停止</button>
+                <div class="text-center z-10">
+                    <h2 class="text-4xl md:text-5xl font-serif font-bold text-gold tracking-widest mb-2">旭日中綬章受章祝賀会</h2>
+                    <p class="text-xl text-gray-300 tracking-wider" id="monitor-clock">00:00:00</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 z-10 my-10">
+                    <!-- 全体進捗 -->
+                    <div class="bg-white/10 rounded-2xl p-8 backdrop-blur-sm border border-white/20 text-center flex flex-col justify-center">
+                        <h3 class="text-2xl text-gold mb-4">本日のご来場</h3>
+                        <div class="text-7xl font-bold mb-4 font-serif">
+                            <span id="monitor-count" class="text-white">0</span> <span class="text-3xl text-gray-400">名</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-4 mt-4">
+                            <div id="monitor-progress" class="bg-gold h-4 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                        <p class="text-right text-sm text-gray-400 mt-2">受付率 <span id="monitor-percent">0</span>%</p>
+                    </div>
+
+                    <!-- 最新の受付 -->
+                    <div class="bg-white/10 rounded-2xl p-8 backdrop-blur-sm border border-white/20">
+                        <h3 class="text-2xl text-gold mb-6 border-b border-white/20 pb-2">最新の受付</h3>
+                        <div id="monitor-latest-list" class="space-y-4">
+                            <!-- JSで動的に追加 -->
+                            <p class="text-gray-400 text-center italic mt-10">まだ受付データがありません</p>
                         </div>
                     </div>
-                    <div id="reader-container" class="w-full max-w-sm mx-auto overflow-hidden rounded-lg bg-slate-950 relative hidden">
-                        <div id="reader" style="width: 100%;"></div>
-                    </div>
-                    <div id="scan-feedback" class="w-full max-w-md mx-auto mt-4 p-4 rounded-lg text-center font-bold hidden"></div>
-                </div>
-
-                <!-- ゲストリスト -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="p-4 border-b flex justify-between items-center">
-                        <h3 class="text-lg font-bold">ゲスト一覧</h3>
-                        <div class="flex gap-2">
-                            <input type="text" id="admin-search" placeholder="検索..." class="px-3 py-1 border rounded text-sm w-32 md:w-auto">
-                            <button id="btn-inject-sample" class="px-2 py-1 text-xs bg-slate-100 rounded border">デモ追加</button>
-                            <button id="btn-clear-all" class="px-2 py-1 text-xs bg-rose-50 text-rose-600 rounded border border-rose-200">全削除</button>
-                        </div>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
-                                <tr>
-                                    <th class="px-4 py-3">名前</th>
-                                    <th class="px-4 py-3">出欠</th>
-                                    <th class="px-4 py-3">振込状況</th>
-                                    <th class="px-4 py-3">受付状況</th>
-                                    <th class="px-4 py-3 text-center">領収書印刷</th>
-                                    <th class="px-4 py-3 text-right">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-table-body" class="divide-y text-sm"></tbody>
-                        </table>
-                    </div>
                 </div>
             </div>
+        </section>
 
-        </main>
+    </main>
 
-        <footer class="bg-slate-900 text-slate-400 text-xs text-center py-6 mt-12">
-            <p>旭日中授章 受章お祝い会 運営事務局</p>
-        </footer>
-    </div>
+    <footer class="bg-charcoal text-gray-400 py-4 text-center text-sm border-t-4 border-gold">
+        <p>&copy; 2026 Reception System v2.0 - Imperial Ceremony Theme</p>
+    </footer>
 
-    <!-- ============================================== -->
-    <!-- 印刷時専用の領収書・受付票レイアウト (通常時は非表示) -->
-    <!-- ============================================== -->
-    <div id="print-area" class="hidden print:block w-full bg-white p-8">
-        <!-- JavaScriptで内容を流し込みます -->
-    </div>
+    <!-- 共通Toast (通知) -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
 
-    <!-- モーダル用（QRコード表示） -->
-    <div id="qr-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
-        <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl relative">
-            <button id="btn-close-modal" class="absolute top-4 right-4 text-slate-400 text-xl"><i class="fa-solid fa-xmark"></i></button>
-            <h4 class="text-lg font-bold font-serif-jp">出席受付用QRコード</h4>
-            <p id="qr-modal-guest-name" class="font-bold text-[#b89742]"></p>
-            <div class="flex justify-center p-4 bg-slate-50 rounded-xl"><div id="modal-qrcode-container"></div></div>
-            <div class="flex gap-2">
-                <button id="modal-print-btn" class="flex-1 bg-slate-900 text-[#dfc475] font-bold py-2 rounded-lg text-xs"><i class="fa-solid fa-print"></i> 領収書印刷</button>
-                <button id="btn-close-modal-footer" class="flex-1 bg-slate-100 text-slate-800 font-bold py-2 rounded-lg text-xs">閉じる</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ============================================== -->
-    <!-- Firebase Logic -->
-    <!-- ============================================== -->
+    <!-- アプリケーションロジック -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, updateDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'celebration-app-2026';
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyAeOFhEVvwvWN2Cf7Mh2w9HFoEw5-WTfW8",
-            authDomain: "celebration-reception-system.firebaseapp.com",
-            projectId: "celebration-reception-system",
-            storageBucket: "celebration-reception-system.firebasestorage.app",
-            messagingSenderId: "918326808821",
-            appId: "1:918326808821:web:d23cdc70792dfcc2e9f5bc",
-            measurementId: "G-TK7TWD4BDH"
+        // ==========================================
+        // 1. 環境設定と定数 (Config)
+        // ==========================================
+        const CONFIG = {
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'reception-system-mock',
+            theme: {
+                colors: {
+                    success: '#10B981', // green-500
+                    error: '#EF4444',   // red-500
+                    warning: '#F59E0B', // yellow-500
+                    info: '#3B82F6'     // blue-500
+                }
+            }
         };
 
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        let guests = [];
-        let html5QrCode = null;
-
-        // 【修正ポイント】認証処理の安定化
-        async function runAuth() {
-            try {
-                const initialToken = (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) ? __initial_auth_token : null;
-                if (initialToken) {
-                    await signInWithCustomToken(auth, initialToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.error("Auth Error:", err);
-                const statusEl = document.getElementById('auth-status-container');
-                if (statusEl) {
-                    statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-600"></i> <span class="text-rose-800 font-bold">認証エラー: Firebaseコンソールで「匿名認証」を有効にしてください。</span>';
-                    statusEl.className = "bg-rose-50 border border-rose-200 px-4 py-3 rounded-lg text-sm flex items-center gap-2";
-                }
-            }
-        }
-
-        // 【修正ポイント】認証状態の変化を監視し、認証が完了した後にDB同期を開始する
-        onAuthStateChanged(auth, (user) => {
-            const statusEl = document.getElementById('auth-status-container');
-            if (user) {
-                if (statusEl) {
-                    statusEl.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> <span class="text-emerald-800 font-bold">データベース接続完了（同期中）</span>';
-                    statusEl.className = "bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-lg text-sm flex items-center gap-2";
-                }
-                // 認証が成功した場合のみ、Firestoreの監視を開始する
-                startRealtimeSync();
-            }
-        });
-
-        function startRealtimeSync() {
-            const ref = collection(db, 'artifacts', appId, 'public', 'data', 'guests');
-            onSnapshot(ref, (snapshot) => {
-                guests = [];
-                snapshot.forEach(doc => guests.push({ id: doc.id, ...doc.data() }));
+        // ==========================================
+        // 2. UI/Utility Components
+        // ==========================================
+        class UI {
+            static showToast(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
                 
-                updateStats();
-                if (!document.getElementById('view-admin').classList.contains('hidden')) {
-                    renderAdminList();
+                let bgColor, icon;
+                switch(type) {
+                    case 'success': bgColor = 'bg-green-600'; icon = 'fa-check-circle'; break;
+                    case 'error': bgColor = 'bg-red-600'; icon = 'fa-exclamation-circle'; break;
+                    case 'warning': bgColor = 'bg-yellow-500'; icon = 'fa-exclamation-triangle'; break;
+                    default: bgColor = 'bg-blue-600'; icon = 'fa-info-circle';
                 }
+
+                toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0`;
+                toast.innerHTML = `<i class="fas ${icon}"></i> <span>${message}</span>`;
                 
-                const emailInput = document.getElementById('search-guest-email')?.value;
-                if (emailInput && !document.getElementById('guest-status-result').classList.contains('hidden')) {
-                    checkGuestStatus(true);
-                }
-            }, (error) => {
-                console.error("Sync error:", error);
-                const statusEl = document.getElementById('auth-status-container');
-                if (statusEl) {
-                    statusEl.innerHTML = '<i class="fa-solid fa-xmark text-rose-600"></i> <span class="text-rose-800 font-bold">データ同期エラー: 権限がありません。</span>';
-                }
-            });
-        }
+                container.appendChild(toast);
+                
+                // アニメーション表示
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-10', 'opacity-0');
+                });
 
-        window.addEventListener('DOMContentLoaded', () => {
-            runAuth();
-            switchView('guest');
-            setupEventListeners();
-        });
-
-        function setupEventListeners() {
-            document.getElementById('btn-tab-guest').addEventListener('click', () => switchView('guest'));
-            document.getElementById('btn-tab-admin').addEventListener('click', () => switchView('admin'));
-            document.getElementById('btn-search-guest').addEventListener('click', () => checkGuestStatus(false));
-            document.getElementById('attendance-form').addEventListener('submit', handleFormSubmit);
-            document.getElementById('admin-search').addEventListener('input', renderAdminList);
-            document.getElementById('btn-start-scanner').addEventListener('click', startScanner);
-            document.getElementById('btn-stop-scanner').addEventListener('click', stopScanner);
-            document.getElementById('btn-inject-sample').addEventListener('click', injectSampleData);
-            document.getElementById('btn-clear-all').addEventListener('click', clearAllData);
-            document.getElementById('btn-close-modal').addEventListener('click', closeQrModal);
-            document.getElementById('btn-close-modal-footer').addEventListener('click', closeQrModal);
-        }
-
-        function updateStats() {
-            document.getElementById('stat-total').innerText = guests.length + ' 名';
-            document.getElementById('stat-attending').innerText = guests.filter(g => g.attendance === '出席').length + ' 名';
-            document.getElementById('stat-paid').innerText = guests.filter(g => g.paid).length + ' 名';
-            document.getElementById('stat-checkedin').innerText = guests.filter(g => g.checkedIn).length + ' 名';
-        }
-
-        window.switchView = function(view) {
-            if (view === 'admin') {
-                const pass = prompt("管理者パスワードを入力してください (初期値: 1123)");
-                if (pass !== "1123") return alert("パスワードが違います");
-            }
-            document.getElementById('view-guest').classList.toggle('hidden', view !== 'guest');
-            document.getElementById('view-admin').classList.toggle('hidden', view !== 'admin');
-            
-            document.getElementById('btn-tab-guest').className = view === 'guest' ? "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all bg-gold-gradient text-slate-950 shadow" : "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all text-slate-400 hover:text-white";
-            document.getElementById('btn-tab-admin').className = view === 'admin' ? "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all bg-gold-gradient text-slate-950 shadow" : "flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all text-slate-400 hover:text-white";
-            
-            if (view === 'admin') renderAdminList();
-        };
-
-        window.handleFormSubmit = async function(e) {
-            e.preventDefault();
-            if (!auth.currentUser) return alert('データベースに接続されていません');
-
-            const id = 'GST-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-            const newGuest = {
-                name: document.getElementById('input-name').value.trim(),
-                kana: document.getElementById('input-kana').value.trim(),
-                email: document.getElementById('input-email').value.trim().toLowerCase(),
-                organization: document.getElementById('input-organization').value.trim(),
-                message: document.getElementById('input-message').value.trim(),
-                attendance: document.querySelector('input[name="attendance"]:checked').value,
-                paid: false, checkedIn: false,
-                createdAt: new Date().toLocaleString('ja-JP')
-            };
-
-            if (guests.find(g => g.email === newGuest.email)) {
-                return alert('このメールアドレスは既に登録されています');
-            }
-
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guests', id), newGuest);
-                document.getElementById('attendance-form').reset();
-                alert("登録が完了しました。ご入力のメールアドレスで照会が可能です。");
-            } catch (err) {
-                console.error(err);
-                alert("登録エラーが発生しました");
-            }
-        };
-
-        window.checkGuestStatus = function(silent = false) {
-            const email = document.getElementById('search-guest-email').value.trim().toLowerCase();
-            const res = document.getElementById('guest-status-result');
-            if (!email) {
-                if(!silent) alert("メールアドレスを入力してください");
-                return;
-            }
-
-            const guest = guests.find(g => g.email === email);
-            res.classList.remove('hidden');
-
-            if (!guest) {
-                res.innerHTML = `<p class="text-rose-600 font-bold"><i class="fa-solid fa-circle-exclamation"></i> 登録が見つかりません</p>`;
-                return;
-            }
-
-            if (guest.attendance === '欠席') {
-                res.innerHTML = `<p>ご欠席で登録されています。</p>`;
-                return;
-            }
-
-            if (!guest.paid) {
-                res.innerHTML = `
-                    <div class="text-amber-600 font-bold mb-2"><i class="fa-solid fa-circle-info"></i> 会費未振込（確認中）です</div>
-                    <div class="bg-slate-50 p-3 rounded text-sm">【お振込先】葵銀行 東京中央支店(普通)1234567<br>振込名義の前にID <strong>${guest.id}</strong> をご入力ください。</div>
-                `;
-            } else {
-                res.innerHTML = `
-                    <div class="flex items-center gap-4">
-                        <div id="status-qrcode" class="p-2 bg-white border rounded"></div>
-                        <div>
-                            <h4 class="font-bold text-lg">${guest.name} 様</h4>
-                            <p class="text-xs text-emerald-600 font-bold border border-emerald-200 bg-emerald-50 inline-block px-2 rounded mb-2">振込確認済</p>
-                            <button onclick="printGuestTicket('${guest.id}')" class="block w-full bg-slate-900 text-[#dfc475] px-3 py-2 rounded text-sm font-bold">
-                                <i class="fa-solid fa-print"></i> 領収書 兼 受付票を印刷
-                            </button>
-                        </div>
-                    </div>
-                `;
+                // 自動消去
                 setTimeout(() => {
-                    document.getElementById('status-qrcode').innerHTML = '';
-                    new QRCode(document.getElementById('status-qrcode'), { text: guest.id, width: 100, height: 100, correctLevel: QRCode.CorrectLevel.H });
-                }, 50);
+                    toast.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
             }
-        };
 
-        window.printGuestTicket = function(id) {
-            const guest = guests.find(g => g.id === id);
-            if (!guest) return;
-
-            const tempDiv = document.createElement('div');
-            new QRCode(tempDiv, { text: guest.id, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.H });
-
-            setTimeout(() => {
-                const qrCanvas = tempDiv.querySelector('canvas');
-                const qrImgSrc = qrCanvas ? qrCanvas.toDataURL() : '';
-                const today = new Date().toLocaleDateString('ja-JP');
-
-                const printArea = document.getElementById('print-area');
-                printArea.innerHTML = `
-                    <div style="max-width: 800px; margin: 0 auto; font-family: 'Helvetica Neue', Arial, sans-serif; color: #333;">
-                        <div style="text-align: center; border-bottom: 3px double #b89742; padding-bottom: 15px; margin-bottom: 30px;">
-                            <h1 style="font-size: 28px; margin: 0;">旭日中授章 受章お祝い会</h1>
-                            <h2 style="font-size: 18px; color: #666; margin: 5px 0 0 0;">出席受付票 兼 領収書</h2>
-                        </div>
-                        
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;">
-                            <div>
-                                <p style="font-size: 28px; font-weight: bold; margin: 0; border-bottom: 1px solid #333; padding-bottom: 5px; min-width: 300px;">
-                                    ${guest.name} 様
-                                </p>
-                                <p style="font-size: 14px; margin-top: 5px; color: #555;">${guest.organization}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p style="margin: 0; font-size: 14px;">発行日：${today}</p>
-                                <p style="font-size: 24px; font-weight: bold; margin: 10px 0 5px 0;">金額： ¥15,000 -</p>
-                                <p style="font-size: 12px; color: #666; margin: 0;">但し、お祝い会会費として上記正に領収いたしました。</p>
-                            </div>
-                        </div>
-
-                        <div style="text-align: center; margin: 40px 0;">
-                            <img src="${qrImgSrc}" style="width: 150px; height: 150px; margin: 0 auto; border: 1px solid #ccc; padding: 10px;" />
-                            <p style="font-family: monospace; font-size: 14px; margin-top: 10px; color: #666;">ID: ${guest.id}</p>
-                        </div>
-
-                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-                            <p style="font-weight: bold; margin-top: 0; font-size: 16px;">【当日のご案内】</p>
-                            <p style="margin: 8px 0; font-size: 14px;">・日時：2026年11月23日（祝） 17:00開宴 (16:30受付開始)</p>
-                            <p style="margin: 8px 0; font-size: 14px;">・場所：帝国ホテル 鳳凰の間</p>
-                            <p style="margin: 8px 0; font-size: 14px; color: #b89742; font-weight: bold;">※当日は本票を印刷してお持ちいただくか、スマートフォンの画面を受付にご提示ください。</p>
-                        </div>
-                    </div>
-                `;
-
-                window.print();
-            }, 100);
-        };
-
-        window.renderAdminList = function() {
-            const tbody = document.getElementById('admin-table-body');
-            const search = document.getElementById('admin-search')?.value.toLowerCase() || '';
-            tbody.innerHTML = '';
-            
-            const filtered = guests.filter(g => g.name.toLowerCase().includes(search) || g.id.toLowerCase().includes(search));
-            
-            filtered.forEach(g => {
-                const tr = document.createElement('tr');
-                const btnPay = g.attendance === '出席' 
-                    ? `<button onclick="toggleField('${g.id}', 'paid', ${!g.paid})" class="px-2 py-1 rounded text-xs ${g.paid ? 'bg-blue-600 text-white' : 'bg-slate-200'}">${g.paid ? '振込済' : '未確認'}</button>` 
-                    : '-';
-                const btnCheck = g.attendance === '出席' 
-                    ? `<button onclick="toggleField('${g.id}', 'checkedIn', ${!g.checkedIn})" class="px-2 py-1 rounded text-xs ${g.checkedIn ? 'bg-indigo-600 text-white' : 'bg-slate-200'}">${g.checkedIn ? '来場済' : '未受付'}</button>` 
-                    : '-';
-                const btnPrint = (g.attendance === '出席' && g.paid)
-                    ? `<button onclick="printGuestTicket('${g.id}')" class="px-2 py-1 bg-slate-800 text-[#dfc475] rounded text-xs"><i class="fa-solid fa-print"></i></button>`
-                    : '-';
-
-                tr.innerHTML = `
-                    <td class="px-4 py-2 border-b"><div class="font-bold">${g.name}</div><div class="text-xs text-slate-400">${g.id}</div></td>
-                    <td class="px-4 py-2 border-b">${g.attendance}</td>
-                    <td class="px-4 py-2 border-b">${btnPay}</td>
-                    <td class="px-4 py-2 border-b">${btnCheck}</td>
-                    <td class="px-4 py-2 border-b text-center">${btnPrint}</td>
-                    <td class="px-4 py-2 border-b text-right"><button onclick="deleteGuest('${g.id}')" class="text-rose-500"><i class="fa-trash-can fa-solid"></i></button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        };
-
-        window.toggleField = async function(id, field, value) {
-            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guests', id), { [field]: value }); } 
-            catch(e) { console.error(e); }
-        };
-
-        window.deleteGuest = async function(id) {
-            if(confirm('削除しますか？')) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guests', id));
-        };
-
-        window.startScanner = function() {
-            document.getElementById('reader-container').classList.remove('hidden');
-            document.getElementById('btn-start-scanner').classList.add('hidden');
-            document.getElementById('btn-stop-scanner').classList.remove('hidden');
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, async (text) => {
-                const id = text.trim();
-                const g = guests.find(x => x.id === id);
-                if(g && g.attendance === '出席' && g.paid && !g.checkedIn) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guests', id), { checkedIn: true });
-                    alert(`${g.name}様の受付が完了しました！`);
+            static toggleLoading(show) {
+                const loader = document.getElementById('global-loading');
+                if (show) {
+                    loader.classList.remove('hidden');
+                    // setTimeoutでopacityを操作しないとtransitionが効かない
+                    setTimeout(() => loader.classList.remove('opacity-0'), 10);
                 } else {
-                    alert('無効なQRコード、または振込未確認です');
+                    loader.classList.add('opacity-0');
+                    setTimeout(() => loader.classList.add('hidden'), 500);
                 }
-            }, () => {}).catch(err => alert("カメラを起動できません"));
-        };
+            }
 
-        window.stopScanner = function() {
-            if(html5QrCode) html5QrCode.stop();
-            document.getElementById('reader-container').classList.add('hidden');
-            document.getElementById('btn-start-scanner').classList.remove('hidden');
-            document.getElementById('btn-stop-scanner').classList.add('hidden');
-        };
+            static formatDate(dateObj) {
+                if (!dateObj) return '-';
+                const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
+                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            }
+            
+            static formatDateTimeFull(dateObj) {
+                 if (!dateObj) return '-';
+                 const d = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
+                 return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+            }
+        }
 
-        window.injectSampleData = async function() {
-            const id = 'GST-DEMO' + Date.now().toString().slice(-4);
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'guests', id), {
-                name: '千代田 栄一', kana: 'チヨダ エイイチ', email: 'test@example.com', organization: '〇〇株式会社',
-                attendance: '出席', paid: true, checkedIn: false, createdAt: new Date().toLocaleString()
-            });
-        };
+        // ==========================================
+        // 3. Service Layer (Firebase Operations)
+        // ==========================================
+        class GuestService {
+            constructor(db, appId) {
+                this.db = db;
+                // Rule 1: Strict paths for Canvas
+                this.collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'guests');
+                this.listeners = [];
+                this.allGuestsCache = [];
+            }
 
-        window.openQrModal = function(id) {
-            const guest = guests.find(g => g.id === id);
-            if (!guest) return;
-            document.getElementById('qr-modal-guest-name').innerText = guest.name + ' 様';
-            const qrContainer = document.getElementById('modal-qrcode-container');
-            qrContainer.innerHTML = ''; 
-            new QRCode(qrContainer, { text: guest.id, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.H });
-            document.getElementById('modal-print-btn').onclick = () => printGuestTicket(guest.id);
-            document.getElementById('qr-modal').classList.remove('hidden');
-        };
+            async registerGuest(data) {
+                try {
+                    const docRef = await addDoc(this.collectionRef, {
+                        ...data,
+                        uuid: crypto.randomUUID(), // QR用の識別子
+                        checkedIn: false,
+                        checkedInTime: null,
+                        createdAt: serverTimestamp(),
+                        attendance: '出席', // モックとして
+                        paymentStatus: '未入金' // モックとして
+                    });
+                    // 生成されたUUIDを返す
+                    const snapshot = await getDocs(this.collectionRef); // IDを取得するために簡易的に全取得は非効率だが、今回はキャッシュから探すか新しく取得する
+                    // 追加したばかりのドキュメントのIDはdocRef.id
+                    return data.uuid; // 生成したものをそのまま返す
+                } catch (error) {
+                    console.error("Error adding guest: ", error);
+                    throw error;
+                }
+            }
 
-        window.closeQrModal = function() {
-            document.getElementById('qr-modal').classList.add('hidden');
-        };
+            // Canvas Rule 2: 複雑なクエリを使わず全件取得してJSで処理
+            subscribeAll(callback) {
+                const q = query(this.collectionRef);
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const guests = [];
+                    snapshot.forEach((doc) => {
+                        guests.push({ id: doc.id, ...doc.data() });
+                    });
+                    this.allGuestsCache = guests; // キャッシュ更新
+                    callback(guests);
+                }, (error) => {
+                    console.error("Firestore listen error: ", error);
+                    UI.showToast("データ同期エラー", "error");
+                });
+                this.listeners.push(unsubscribe);
+                return unsubscribe;
+            }
+
+            async processCheckIn(uuid) {
+                // キャッシュから該当UUIDを探す
+                const guest = this.allGuestsCache.find(g => g.uuid === uuid);
+                if (!guest) {
+                    return { success: false, message: '該当する参加者が見つかりません。', status: 'not_found' };
+                }
+
+                if (guest.checkedIn) {
+                    return { 
+                        success: false, 
+                        message: `既に受付済です<br><span class="text-sm">(${UI.formatDate(guest.checkedInTime)} 受付)</span>`, 
+                        status: 'already_checked_in',
+                        guest: guest
+                    };
+                }
+
+                // 未受付の場合、更新処理
+                const docRef = doc(this.db, 'artifacts', CONFIG.appId, 'public', 'data', 'guests', guest.id);
+                try {
+                    await updateDoc(docRef, {
+                        checkedIn: true,
+                        checkedInTime: serverTimestamp()
+                    });
+                    return { success: true, message: '受付完了', guest: guest };
+                } catch (error) {
+                    console.error("Check-in error:", error);
+                    return { success: false, message: '受付処理に失敗しました。', status: 'error' };
+                }
+            }
+
+            cleanup() {
+                this.listeners.forEach(unsub => unsub());
+            }
+        }
+
+        // ==========================================
+        // 4. Views / Controllers
+        // ==========================================
+
+        // --- Guest View Controller ---
+        class GuestController {
+            constructor(guestService) {
+                this.service = guestService;
+                this.form = document.getElementById('guest-form');
+                this.containerForm = document.getElementById('guest-registration-form-container');
+                this.containerTicket = document.getElementById('guest-ticket-container');
+                this.btnNew = document.getElementById('btn-new-registration');
+                
+                this.initEvents();
+            }
+
+            initEvents() {
+                this.form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    UI.toggleLoading(true);
+                    
+                    const data = {
+                        name: document.getElementById('g-name').value,
+                        kana: document.getElementById('g-kana').value,
+                        email: document.getElementById('g-email').value,
+                        organization: document.getElementById('g-organization').value,
+                        position: document.getElementById('g-position').value,
+                        guestType: document.getElementById('g-guestType').value,
+                    };
+
+                    try {
+                        const uuid = await this.service.registerGuest(data);
+                        this.showTicket(data.name, uuid);
+                        UI.showToast("登録が完了しました", "success");
+                    } catch (error) {
+                        UI.showToast("登録に失敗しました", "error");
+                    } finally {
+                        UI.toggleLoading(false);
+                    }
+                });
+
+                this.btnNew.addEventListener('click', () => {
+                    this.form.reset();
+                    this.containerTicket.classList.add('hidden');
+                    this.containerForm.classList.remove('hidden');
+                    // QRコード要素の中身をクリア
+                    document.getElementById("qrcode").innerHTML = "";
+                });
+            }
+
+            showTicket(name, uuid) {
+                this.containerForm.classList.add('hidden');
+                this.containerTicket.classList.remove('hidden');
+                
+                document.getElementById('ticket-name').textContent = `${name} 様`;
+                document.getElementById('ticket-uuid').textContent = uuid;
+                
+                // QRコード生成
+                document.getElementById("qrcode").innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), {
+                    text: uuid,
+                    width: 160,
+                    height: 160,
+                    colorDark : "#333333",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.M
+                });
+            }
+        }
+
+        // --- Admin View Controller ---
+        class AdminController {
+            constructor(guestService) {
+                this.service = guestService;
+                this.guests = [];
+                this.filteredGuests = [];
+                this.charts = {};
+                
+                this.initTabs();
+                this.initSearch();
+                this.initExport();
+            }
+
+            initTabs() {
+                const tabs = document.querySelectorAll('.admin-tab-btn');
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        // Reset all
+                        tabs.forEach(t => {
+                            t.classList.remove('bg-gold/20', 'text-burgundy', 'font-bold');
+                            t.classList.add('hover:bg-gray-100', 'text-charcoal');
+                        });
+                        document.querySelectorAll('.admin-content').forEach(c => {
+                            c.classList.add('hidden');
+                            c.classList.remove('active');
+                        });
+
+                        // Set active
+                        const targetId = e.currentTarget.dataset.admintab;
+                        e.currentTarget.classList.add('bg-gold/20', 'text-burgundy', 'font-bold');
+                        e.currentTarget.classList.remove('hover:bg-gray-100', 'text-charcoal');
+                        document.getElementById(targetId).classList.remove('hidden');
+                        document.getElementById(targetId).classList.add('active');
+                    });
+                });
+            }
+
+            updateData(guests) {
+                this.guests = guests;
+                this.filterAndRenderTable();
+                this.updateDashboard();
+            }
+
+            initSearch() {
+                document.getElementById('guest-search').addEventListener('input', (e) => {
+                    this.filterAndRenderTable(e.target.value);
+                });
+            }
+
+            filterAndRenderTable(query = '') {
+                const q = query.toLowerCase();
+                this.filteredGuests = this.guests.filter(g => {
+                    return (g.name && g.name.toLowerCase().includes(q)) ||
+                           (g.organization && g.organization.toLowerCase().includes(q));
+                });
+                // 最新登録順にソート
+                this.filteredGuests.sort((a, b) => {
+                    const timeA = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
+                    const timeB = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
+                    return timeB - timeA;
+                });
+                this.renderTable();
+            }
+
+            renderTable() {
+                const tbody = document.getElementById('guest-table-body');
+                const msg = document.getElementById('no-guests-msg');
+                tbody.innerHTML = '';
+
+                if (this.filteredGuests.length === 0) {
+                    msg.classList.remove('hidden');
+                    return;
+                }
+                msg.classList.add('hidden');
+
+                this.filteredGuests.forEach(g => {
+                    const statusClass = g.checkedIn 
+                        ? 'bg-green-100 text-green-800 border-green-200' 
+                        : 'bg-gray-100 text-gray-800 border-gray-200';
+                    const statusText = g.checkedIn ? '受付済' : '未受付';
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 border-b border-gray-100 transition';
+                    tr.innerHTML = `
+                        <td class="p-3 font-medium text-burgundy">${g.name || '-'}</td>
+                        <td class="p-3">${g.organization || '-'}</td>
+                        <td class="p-3"><span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs">${g.guestType || '-'}</span></td>
+                        <td class="p-3"><span class="px-2 py-1 rounded border text-xs ${statusClass}">${statusText}</span></td>
+                        <td class="p-3 text-gray-500 text-sm">${g.checkedIn ? UI.formatDate(g.checkedInTime) : '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            updateDashboard() {
+                const total = this.guests.length;
+                const attending = this.guests.filter(g => g.attendance !== '欠席').length;
+                const checkedIn = this.guests.filter(g => g.checkedIn).length;
+                const waiting = attending - checkedIn;
+
+                document.getElementById('kpi-total').textContent = total;
+                document.getElementById('kpi-attending').textContent = attending;
+                document.getElementById('kpi-checked-in').textContent = checkedIn;
+                document.getElementById('kpi-waiting').textContent = waiting > 0 ? waiting : 0;
+
+                this.drawCharts(checkedIn, waiting > 0 ? waiting : 0);
+            }
+
+            drawCharts(checkedIn, waiting) {
+                // Chart.js共通設定
+                Chart.defaults.font.family = "'Noto Sans JP', sans-serif";
+                
+                // 受付状況チャート
+                const ctxCheckin = document.getElementById('checkinChart').getContext('2d');
+                if (this.charts.checkin) this.charts.checkin.destroy();
+                this.charts.checkin = new Chart(ctxCheckin, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['受付済', '未受付'],
+                        datasets: [{
+                            data: [checkedIn, waiting],
+                            backgroundColor: ['#10B981', '#F3F4F6'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+                });
+
+                // 来賓区分チャート集計
+                const types = {};
+                this.guests.forEach(g => {
+                    const t = g.guestType || 'その他';
+                    types[t] = (types[t] || 0) + 1;
+                });
+                
+                const ctxType = document.getElementById('typeChart').getContext('2d');
+                if (this.charts.type) this.charts.type.destroy();
+                this.charts.type = new Chart(ctxType, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(types),
+                        datasets: [{
+                            data: Object.values(types),
+                            backgroundColor: ['#7A1F3D', '#C5A059', '#3B82F6', '#F59E0B', '#6B7280'],
+                            borderWidth: 1,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+                });
+            }
+
+            initExport() {
+                document.getElementById('btn-export-csv').addEventListener('click', () => {
+                    if (this.guests.length === 0) {
+                        UI.showToast("出力するデータがありません", "warning");
+                        return;
+                    }
+                    
+                    // エクスポート用にデータを整形
+                    const exportData = this.guests.map(g => ({
+                        "氏名": g.name || '',
+                        "フリガナ": g.kana || '',
+                        "会社・団体": g.organization || '',
+                        "役職": g.position || '',
+                        "来賓区分": g.guestType || '',
+                        "メール": g.email || '',
+                        "受付状況": g.checkedIn ? '受付済' : '未受付',
+                        "受付時間": g.checkedIn ? UI.formatDateTimeFull(g.checkedInTime) : '',
+                        "登録日": UI.formatDateTimeFull(g.createdAt)
+                    }));
+
+                    const worksheet = XLSX.utils.json_to_sheet(exportData);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "参加者一覧");
+                    
+                    // ファイル名に現在時刻を入れる
+                    const now = new Date();
+                    const filename = `参加者一覧_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
+                    
+                    XLSX.writeFile(workbook, filename);
+                    UI.showToast("Excelファイルを出力しました", "success");
+                });
+            }
+        }
+
+        // --- Reception View Controller ---
+        class ReceptionController {
+            constructor(guestService) {
+                this.service = guestService;
+                this.html5QrcodeScanner = null;
+                this.isScanning = false;
+                
+                this.btnStart = document.getElementById('btn-start-scanner');
+                this.btnStop = document.getElementById('btn-stop-scanner');
+                this.resultArea = document.getElementById('reception-result');
+                this.loadingOverlay = document.getElementById('qr-loading');
+
+                this.initEvents();
+            }
+
+            initEvents() {
+                this.btnStart.addEventListener('click', () => this.startScanner());
+                this.btnStop.addEventListener('click', () => this.stopScanner());
+            }
+
+            startScanner() {
+                if (this.isScanning) return;
+                
+                this.btnStart.classList.add('hidden');
+                this.btnStop.classList.remove('hidden');
+                this.resultArea.classList.add('hidden', 'scale-95', 'opacity-0');
+
+                // html5-qrcode の初期化
+                const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+                this.html5QrcodeScanner = new Html5Qrcode("qr-reader");
+                
+                this.html5QrcodeScanner.start(
+                    { facingMode: "environment" }, // 背面カメラを優先
+                    config,
+                    this.onScanSuccess.bind(this),
+                    this.onScanFailure.bind(this)
+                ).then(() => {
+                    this.isScanning = true;
+                }).catch(err => {
+                    console.error("Camera error:", err);
+                    UI.showToast("カメラの起動に失敗しました。権限を確認してください。", "error");
+                    this.resetUI();
+                });
+            }
+
+            async stopScanner() {
+                if (this.html5QrcodeScanner && this.isScanning) {
+                    try {
+                        await this.html5QrcodeScanner.stop();
+                        this.html5QrcodeScanner.clear();
+                    } catch(e) { console.error("Stop error", e); }
+                }
+                this.resetUI();
+            }
+
+            resetUI() {
+                this.isScanning = false;
+                this.btnStart.classList.remove('hidden');
+                this.btnStop.classList.add('hidden');
+            }
+
+            // QR読み取り成功時の処理
+            async onScanSuccess(decodedText, decodedResult) {
+                // 連続読み取りを防止するためスキャナーを一時停止（または状態フラグ）
+                if(this.processingScan) return;
+                this.processingScan = true;
+                
+                // UI状態更新
+                this.loadingOverlay.classList.remove('hidden');
+                
+                // 処理を少し遅延させてUIが追いつくようにする
+                setTimeout(async () => {
+                    const result = await this.service.processCheckIn(decodedText);
+                    this.showResult(result);
+                    
+                    // 一定時間後に処理フラグ解除、UIリセット
+                    setTimeout(() => {
+                        this.resultArea.classList.add('scale-95', 'opacity-0');
+                        setTimeout(() => {
+                            this.resultArea.classList.add('hidden');
+                            this.processingScan = false;
+                        }, 300);
+                    }, 3000); // 3秒表示して消える
+                    
+                }, 500);
+            }
+
+            onScanFailure(error) {
+                // 常に呼ばれるのでログ出力のみ（エラー表示はしない）
+            }
+
+            showResult(result) {
+                this.loadingOverlay.classList.add('hidden');
+                this.resultArea.classList.remove('hidden');
+                
+                // アニメーション用
+                setTimeout(() => {
+                    this.resultArea.classList.remove('scale-95', 'opacity-0');
+                }, 50);
+
+                let html = '';
+                if (result.success) {
+                    // 成功
+                    html = `
+                        <div class="text-green-600 mb-4 animate-bounce">
+                            <i class="fas fa-check-circle text-6xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">${result.guest.name} 様</h3>
+                        <p class="text-gray-600 mb-1">${result.guest.organization || ''}</p>
+                        <div class="inline-block px-4 py-1 bg-gold text-white rounded-full font-bold mt-2 shadow">受付完了</div>
+                    `;
+                    // サウンドエフェクト(モック)
+                    // new Audio('success.mp3').play();
+                } else if (result.status === 'already_checked_in') {
+                    // 二重受付
+                    html = `
+                        <div class="text-yellow-500 mb-4">
+                            <i class="fas fa-exclamation-triangle text-6xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">${result.guest.name} 様</h3>
+                        <p class="text-gray-600 mb-1">${result.guest.organization || ''}</p>
+                        <div class="inline-block px-4 py-2 bg-red-100 text-red-700 rounded border border-red-200 mt-2 font-bold">${result.message}</div>
+                    `;
+                } else {
+                    // エラー/未登録
+                    html = `
+                        <div class="text-red-500 mb-4">
+                            <i class="fas fa-times-circle text-6xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">QRコードが無効です</h3>
+                        <p class="text-gray-600">${result.message}</p>
+                    `;
+                }
+                
+                this.resultArea.innerHTML = html;
+            }
+
+            // タブが切り替わったときに呼ばれる
+            onTabLeave() {
+                this.stopScanner();
+            }
+        }
+
+        // --- Monitor View Controller ---
+        class MonitorController {
+            constructor() {
+                this.elCount = document.getElementById('monitor-count');
+                this.elProgress = document.getElementById('monitor-progress');
+                this.elPercent = document.getElementById('monitor-percent');
+                this.elLatestList = document.getElementById('monitor-latest-list');
+                this.elClock = document.getElementById('monitor-clock');
+                
+                this.startClock();
+            }
+
+            startClock() {
+                setInterval(() => {
+                    const now = new Date();
+                    this.elClock.textContent = now.toLocaleTimeString('ja-JP', { hour12: false });
+                }, 1000);
+            }
+
+            updateData(guests) {
+                const total = guests.length;
+                // 出席予定者数を分母とする
+                const expected = guests.filter(g => g.attendance !== '欠席').length || 1; // 0割防止
+                
+                // 受付済みの抽出とソート（新しい順）
+                const checkedInGuests = guests.filter(g => g.checkedIn).sort((a, b) => {
+                    const timeA = a.checkedInTime ? (a.checkedInTime.toMillis ? a.checkedInTime.toMillis() : 0) : 0;
+                    const timeB = b.checkedInTime ? (b.checkedInTime.toMillis ? b.checkedInTime.toMillis() : 0) : 0;
+                    return timeB - timeA;
+                });
+
+                const count = checkedInGuests.length;
+                const percent = total === 0 ? 0 : Math.round((count / expected) * 100);
+
+                // アニメーション更新 (簡易的)
+                this.elCount.textContent = count;
+                this.elProgress.style.width = `${percent > 100 ? 100 : percent}%`;
+                this.elPercent.textContent = percent;
+
+                this.updateLatestList(checkedInGuests.slice(0, 5)); // 最新5件
+            }
+
+            updateLatestList(latestGuests) {
+                if (latestGuests.length === 0) {
+                    this.elLatestList.innerHTML = '<p class="text-gray-400 text-center italic mt-10">まだ受付データがありません</p>';
+                    return;
+                }
+
+                this.elLatestList.innerHTML = '';
+                latestGuests.forEach((g, index) => {
+                    const div = document.createElement('div');
+                    // 1件目は少し強調
+                    const bgClass = index === 0 ? 'bg-gold/20 border-gold/50' : 'bg-white/5 border-white/10';
+                    const textClass = index === 0 ? 'text-white font-bold' : 'text-gray-300';
+                    
+                    div.className = `flex justify-between items-center p-3 rounded-lg border ${bgClass} transition-all duration-500`;
+                    
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-2 rounded-full ${index === 0 ? 'bg-gold animate-pulse' : 'bg-gray-500'}"></div>
+                            <span class="${textClass} text-lg">${g.name} 様</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-400 block">${g.organization || ''}</span>
+                            <span class="text-sm text-gold">${UI.formatDate(g.checkedInTime)}</span>
+                        </div>
+                    `;
+                    this.elLatestList.appendChild(div);
+                });
+            }
+        }
+
+
+        // ==========================================
+        // 5. Main Application Logic
+        // ==========================================
+        class App {
+            constructor() {
+                this.db = null;
+                this.auth = null;
+                
+                this.guestService = null;
+                
+                this.controllers = {};
+                this.currentTab = 'guest-view';
+                
+                this.init();
+            }
+
+            async init() {
+                // UI: モバイルメニュー制御
+                document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+                    document.getElementById('mobile-nav').classList.toggle('hidden');
+                });
+
+                // Firebase 初期化
+                try {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    this.auth = getAuth(app);
+                    this.db = getFirestore(app);
+                    
+                    // Rule 3: Auth Before Queries
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(this.auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(this.auth);
+                    }
+
+                    // 認証状態の監視 (セットアップ完了を待つ)
+                    onAuthStateChanged(this.auth, (user) => {
+                        if (user) {
+                            this.setupServices();
+                            UI.toggleLoading(false);
+                        } else {
+                            UI.showToast("認証に失敗しました。再読み込みしてください。", "error");
+                        }
+                    });
+
+                } catch (error) {
+                    console.error("Initialization Error:", error);
+                    UI.showToast("システムの初期化に失敗しました", "error");
+                    UI.toggleLoading(false);
+                }
+
+                this.setupNavigation();
+            }
+
+            setupServices() {
+                this.guestService = new GuestService(this.db, CONFIG.appId);
+                
+                // コントローラーの初期化
+                this.controllers.guest = new GuestController(this.guestService);
+                this.controllers.admin = new AdminController(this.guestService);
+                this.controllers.reception = new ReceptionController(this.guestService);
+                this.controllers.monitor = new MonitorController();
+
+                // データ購読の開始
+                this.guestService.subscribeAll((guests) => {
+                    // データが更新されたら関係するビューに通知
+                    this.controllers.admin.updateData(guests);
+                    this.controllers.monitor.updateData(guests);
+                });
+            }
+
+            setupNavigation() {
+                const navBtns = document.querySelectorAll('.nav-btn');
+                navBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const targetId = e.currentTarget.dataset.target;
+                        this.switchTab(targetId);
+                        
+                        // モバイルメニューを閉じる
+                        document.getElementById('mobile-nav').classList.add('hidden');
+                        
+                        // スタイル更新
+                        navBtns.forEach(b => {
+                            b.classList.remove('bg-white/10', 'active', 'font-bold');
+                        });
+                        // 同じターゲットを持つ全てのボタン（PC/Mobile両方）をアクティブに
+                        document.querySelectorAll(`.nav-btn[data-target="${targetId}"]`).forEach(b => {
+                            b.classList.add('bg-white/10', 'active', 'font-bold');
+                        });
+                    });
+                });
+            }
+
+            switchTab(targetId) {
+                if (this.currentTab === targetId) return;
+
+                // View固有のLeave処理
+                if (this.currentTab === 'reception-view' && this.controllers.reception) {
+                    this.controllers.reception.onTabLeave();
+                }
+
+                // 表示切り替え
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(targetId).classList.add('active');
+                
+                this.currentTab = targetId;
+
+                // View固有のEnter処理があればここに追加
+                if (targetId === 'admin-view' && this.controllers.admin) {
+                     // チャートの再描画などをトリガー
+                     const checkedIn = this.controllers.admin.guests.filter(g => g.checkedIn).length;
+                     const waiting = this.controllers.admin.guests.length - checkedIn;
+                     this.controllers.admin.drawCharts(checkedIn, waiting);
+                }
+            }
+        }
+
+        // アプリ起動
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new App();
+        });
 
     </script>
 </body>

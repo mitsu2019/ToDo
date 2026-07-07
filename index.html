@@ -20,16 +20,29 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: { burgundy: '#7A1F3D', gold: '#C5A059', ivory: '#FFFDF0', charcoal: '#333333' },
-                    fontFamily: { sans: ['Noto Sans JP', 'sans-serif'], serif: ['Noto Serif JP', 'serif'] }
-                }
-            }
-        }
-    </script>
+    <script type="module">
+  // 1. Firebaseの機能をインポート
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+  // 2. あなたの設定（先ほどコピーしたConfig）
+const firebaseConfig = {
+  apiKey: "AIzaSyBYLBZJ8it2crKFo5xgi99RKy4venCD68A",
+  authDomain: "reception-system-uokuni.firebaseapp.com",
+  projectId: "reception-system-uokuni",
+  storageBucket: "reception-system-uokuni.firebasestorage.app",
+  messagingSenderId: "845919948835",
+  appId: "1:845919948835:web:46ac4e2d91684be1b5e196"
+};
+
+  // 3. 初期化
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // これで db を使ってデータの読み書きが可能になります！
+  console.log("Firebase接続成功:", db);
+</script>
+
     <style>
         body { background-color: #FFFDF0; color: #333333; }
         .tab-content { display: none; }
@@ -55,32 +68,7 @@
         <i class="fas fa-circle-notch fa-spin text-6xl text-gold mb-4"></i>
         <h2 class="text-2xl font-serif text-burgundy">システムを起動しています...</h2>
     </div>
-    
- <!-- SDK の設定と構成 -->
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyAeOFhEVvwvWN2Cf7Mh2w9HFoEw5-WTfW8",
-    authDomain: "celebration-reception-system.firebaseapp.com",
-    projectId: "celebration-reception-system",
-    storageBucket: "celebration-reception-system.firebasestorage.app",
-    messagingSenderId: "918326808821",
-    appId: "1:918326808821:web:d23cdc70792dfcc2e9f5bc",
-    measurementId: "G-TK7TWD4BDH"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
-    
     <!-- 中央ポップアップアラート用コンテナ -->
     <div id="center-alert-container"></div>
 
